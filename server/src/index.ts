@@ -2,13 +2,19 @@
  * index.ts — the Express server (step 7a).
  *
  * The first vertical slice's server half: Postgres -> pg -> Express -> JSON.
- * One endpoint, no client, no styling. Step 7b adds Vite and React on the other
- * side of the same wire.
+ * One endpoint, no styling. Step 7b added Vite and React on the other side of the
+ * same wire; in development they reach this server through Vite's proxy, so the
+ * client fetches the relative path /api/words and nothing here has to know that
+ * two ports are involved. See vite.config.ts.
  *
  * HOW TO RUN IT
  * -------------
- *   npm run dev     node --env-file=.env server/src/index.ts
- *   npm start       node server/src/index.ts        (what Render will run)
+ *   npm run dev:server    node --env-file=.env server/src/index.ts
+ *   npm start             node server/src/index.ts    (what Render will run)
+ *
+ * `dev:server` rather than `dev` since step 7b: development now takes two
+ * processes, this one and `npm run dev:client` (Vite), each in its own terminal.
+ * One manifest, two halves, no script that pretends to start both.
  *
  * The difference is deliberate and is the whole of Q18's local/production split:
  * locally Node reads .env itself, natively, since v20.6 — no dotenv dependency.
@@ -77,7 +83,7 @@ const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   console.error('server: DATABASE_URL is not set.');
   console.error('  It belongs in .env — see .env.example for the shape.');
-  console.error('  `npm run dev` passes --env-file=.env for you.');
+  console.error('  `npm run dev:server` passes --env-file=.env for you.');
   process.exit(1);
 }
 
@@ -87,7 +93,8 @@ if (!connectionString) {
 //
 // A deploy must never land new code on a database that lacks something the code
 // queries. Running the migrations at boot gives one mechanism, identical on this
-// laptop and on Render: both `npm run dev` and `npm start` migrate, then serve.
+// laptop and on Render: both `npm run dev:server` and `npm start` migrate, then
+// serve.
 //
 // Failure then does the right thing with no configuration anywhere: the process
 // exits non-zero, Render's health check never passes, the deploy is marked

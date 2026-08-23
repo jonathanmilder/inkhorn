@@ -34,5 +34,8 @@
 
     "skipLibCheck": true
   },
-  "include": ["server/**/*.ts"]
+  // The Node half of the repo: the server, plus vite.config.ts, which is a Node
+  // program too — it configures the build, it is not part of it. The browser half
+  // has its own file at client/tsconfig.json, and `npm run typecheck` runs both.
+  "include": ["server/**/*.ts", "vite.config.ts"]
 }

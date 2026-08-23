@@ -6,22 +6,30 @@
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=24.2.0"
   },
   "scripts": {
-    "dev": "node --env-file=.env server/src/index.ts",
+    "dev:server": "node --env-file=.env server/src/index.ts",
+    "dev:client": "vite",
     "start": "node server/src/index.ts",
+    "build": "vite build",
     "migrate": "node --env-file=.env server/src/migrate.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc -p tsconfig.json && tsc -p client/tsconfig.json"
   },
   "dependencies": {
     "express": "^5.2.1",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^24.13.3",
     "@types/pg": "^8.21.0",
-    "typescript": "^7.0.2"
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
   }
 }

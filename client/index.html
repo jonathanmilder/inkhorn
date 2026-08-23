@@ -1,0 +1,22 @@
+<!doctype html>
+<!--
+  index.html — the client's entry point (step 7b).
+
+  In Vite this file is not a template the build fills in; it is the source it
+  starts from. Vite reads the <script> below, follows the import graph out of
+  main.tsx, and rewrites the tag to point at the bundle it produces. That is why
+  the path is /src/main.tsx and not a built filename: the path is root-relative to
+  Vite's root, which vite.config.ts sets to client/.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lexicon</title>
+  </head>
+  <body>
+    <!-- React mounts here. Everything visible on the page is built by main.tsx. -->
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

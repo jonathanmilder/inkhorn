@@ -1,0 +1,58 @@
+{
+  // The browser half of the repo. tsconfig.json at the root is the Node half — the
+  // server and vite.config.ts — and the two genuinely cannot share one file: this
+  // one needs the DOM and JSX and must not see Node's globals; that one needs
+  // Node's globals and has no DOM. `npm run typecheck` runs both, in order.
+  //
+  // As on the server, tsc never emits anything here. Vite compiles this code. tsc
+  // is a checker and only a checker.
+  "compilerOptions": {
+    // These describe what a bundler does, not what Node does. `bundler` resolution
+    // is why an import may omit an extension and still be found — Vite resolves it,
+    // and Node's rules about explicit extensions do not apply to code Node will
+    // never run.
+    "module": "esnext",
+    "moduleResolution": "bundler",
+
+    // A browser, not Node 24. The root config targets es2024 because that is what
+    // Node 24 runs; this one aims at a modern-browser baseline instead. Since
+    // nothing is emitted, `target` only decides what tsc will accept; what actually
+    // ships is Vite's build target.
+    "target": "es2022",
+
+    // The DOM types the server config deliberately does not have: document,
+    // fetch, AbortController, DOMException.
+    "lib": ["es2022", "dom", "dom.iterable"],
+
+    // Empty, deliberately. Left unset, TypeScript loads every package in
+    // node_modules/@types — including @types/node, whose globals overlap the DOM's
+    // and would let server-only code typecheck in the browser. React's types come
+    // in through its imports and need no entry here.
+    "types": [],
+
+    // The modern JSX transform: no `import React` at the top of every component.
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+
+    "noEmit": true,
+
+    // Imports name the real file, './app.tsx', exactly as the server's imports do.
+    "allowImportingTsExtensions": true,
+
+    // Not required by Vite, which can compile enums and namespaces perfectly well.
+    // Kept so both halves of the repo are written in the same subset of TypeScript
+    // — the one that is only annotations, and can be stripped rather than compiled.
+    "erasableSyntaxOnly": true,
+
+    "verbatimModuleSyntax": true,
+
+    // The Q19 defence again, in the checker: a mis-cased import fails here on
+    // Windows instead of at deploy time on Linux.
+    "forceConsistentCasingInFileNames": true,
+
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}
