@@ -4,11 +4,11 @@
  * WHAT THIS IS FOR
  * ----------------
  * The v3.1 artifact's library lives in a JSON export. This script is what moves
- * it into Postgres. It is built across three steps, and TWO of them exist today:
+ * it into Postgres. It was built across three steps:
  *
  *   step 5  read the file, validate it, print what is there.   <- done
  *   step 6  insert the user, the settings, and the 1,070 words. <- done
- *   step 9  insert the 95 progress records.                     <- not yet
+ *   step 9  insert the 95 progress records, then check them.    <- done
  *
  * HOW TO RUN IT
  * -------------
@@ -38,11 +38,18 @@
  *
  * --target main additionally requires a typed confirmation.
  *
- * WHAT IT WRITES (5d, steps 3 to 5 of the sequence)
+ * WHAT IT WRITES (5d, steps 3 to 7 of the sequence)
  * -------------------------------------------------
  * Inside ONE transaction: TRUNCATE the four application tables, insert the single
- * users row and its user_settings row, then insert all 1,070 words verbatim with
- * 26a's accepted corrections and Q27's five rules applied.
+ * users row and its user_settings row, insert all 1,070 words verbatim with
+ * 26a's accepted corrections and Q27's five rules applied, then insert the 95
+ * progress records and read them back (the orphan check) before COMMIT.
+ *
+ * A progress record is keyed by headword, and it is matched to its word
+ * case-insensitively, because identity is the lowercase comparison (24h): once
+ * 26a stores `Arcadia`, the progress key in the file still says `arcadia`.
+ * `nextReview` goes to `next_review` as written. `last_rated` is not in the
+ * file at all; it is derived, once, and deriveLastRated says how and how well.
  *
  * schema_migrations is NOT truncated. It belongs to the migration runner (Q28);
  * emptying it would make the database and the repo disagree, silently.
@@ -524,7 +531,7 @@ function reportStructure(backup: Backup, findings: Findings): void {
 
   // --- progress ------------------------------------------------------------
   // 24h settled that identity is the lowercase comparison, so progress keys are
-  // resolved case-insensitively here exactly as step 9 will resolve them.
+  // resolved case-insensitively here exactly as the write half resolves them.
   const byLower = new Map(words.map((word) => [word.toLowerCase(), word]));
   const fetchedLower = new Set(
     backup.words.filter(isFetched).map((word) => String(word['word']).toLowerCase()),
@@ -554,10 +561,13 @@ function reportStructure(backup: Backup, findings: Findings): void {
 
   const exact = progressKeys.filter((key) => byLower.get(key.toLowerCase()) === key).length;
   const inexact = progressKeys.length - exact;
+  // This compares against the headwords in the FILE, which are all lowercase.
+  // The match that decides where a record lands is against the headword as
+  // STORED, after 26a, and "Progress — as planned" reports that one.
   console.log(
     inexact === 0
-      ? `        All ${n(exact)} match their headword exactly, so the case-insensitive ` +
-          'match changes nothing today. Step 9 needs it anyway, once 26a adds capitals.'
+      ? `        All ${n(exact)} match their headword in the file exactly. 26a's capitals ` +
+          'come later; "Progress — as planned" matches against those.'
       : `        ${n(exact)} match exactly; ${n(inexact)} need the case-insensitive match.`,
   );
 }
@@ -660,38 +670,75 @@ function reportStrayKeys(backup: Backup, findings: Findings): void {
 // Progress records
 // ---------------------------------------------------------------------------
 
+/** A progress record whose three fields hold what the write half needs. */
+interface WellFormedProgress {
+  readonly ease: number;
+  readonly repetition: number;
+  /** The string as written in the file. */
+  readonly nextReview: string;
+  /** The same moment, in milliseconds since 1970 (UTC). */
+  readonly timestamp: number;
+}
+
 /**
- * The shape of the 95 records step 9 will insert. Checked here rather than
+ * A progress record's fields, or null if any of them is malformed. One
+ * definition, used by both the check below and the write plan, so the two
+ * cannot disagree about which records are loadable.
+ *
+ * A negative repetition counts as malformed: SM-2 counts up from zero, and
+ * getInterval would recurse forever on one.
+ */
+function readProgress(record: ProgressRecord): WellFormedProgress | null {
+  const ease = record['ease'];
+  const repetition = record['repetition'];
+  const nextReview = record['nextReview'];
+
+  if (typeof ease !== 'number') return null;
+  if (typeof repetition !== 'number' || !Number.isInteger(repetition) || repetition < 0) {
+    return null;
+  }
+  if (typeof nextReview !== 'string') return null;
+
+  const timestamp = Date.parse(nextReview);
+  if (Number.isNaN(timestamp)) return null;
+
+  return { ease, repetition, nextReview, timestamp };
+}
+
+/**
+ * The shape of the 95 records the write half inserts. Checked here rather than
  * there, because 5d wants the file to fail before Postgres is opened, and a
  * malformed `nextReview` is exactly the kind of thing that would otherwise
  * surface halfway through a transaction.
  */
 function reportProgressShape(backup: Backup, findings: Findings): void {
   const malformed: string[] = [];
+  const zoneless: string[] = [];
   const lowEase: string[] = [];
   const unrecognised = new Map<string, string[]>();
   let earliest = Infinity;
   let latest = -Infinity;
 
   for (const [word, record] of Object.entries(backup.progress)) {
-    const ease = record['ease'];
-    const repetition = record['repetition'];
-    const nextReview = record['nextReview'];
+    const progress = readProgress(record);
 
-    const timestamp = typeof nextReview === 'string' ? Date.parse(nextReview) : NaN;
-
-    if (
-      typeof ease !== 'number' ||
-      !Number.isInteger(repetition) ||
-      Number.isNaN(timestamp)
-    ) {
+    if (progress === null) {
       malformed.push(word);
       continue;
     }
 
-    if (ease < EASE_FLOOR) lowEase.push(word);
-    earliest = Math.min(earliest, timestamp);
-    latest = Math.max(latest, timestamp);
+    // v3.1 only ever wrote toISOString()'s output, which is always UTC and
+    // always ends in Z. A string that does not survive a round trip through it
+    // is something else — and one with no zone would be read as local time by
+    // JavaScript, which derives last_rated, and as the session's zone by
+    // Postgres, which stores next_review: the same text, two moments.
+    if (new Date(progress.timestamp).toISOString() !== progress.nextReview) {
+      zoneless.push(word);
+    }
+
+    if (progress.ease < EASE_FLOOR) lowEase.push(word);
+    earliest = Math.min(earliest, progress.timestamp);
+    latest = Math.max(latest, progress.timestamp);
 
     for (const key of Object.keys(record)) {
       if (PROGRESS_KEYS.has(key)) continue;
@@ -707,10 +754,20 @@ function reportProgressShape(backup: Backup, findings: Findings): void {
     findings,
     malformed.length === 0,
     `all ${n(Object.keys(backup.progress).length)} hold a numeric ease, an integer ` +
-      'repetition and a parseable nextReview.',
+      'repetition of zero or more, and a parseable nextReview.',
     `${count(malformed.length, 'progress record')} ${malformed.length === 1 ? 'is' : 'are'} ` +
       `malformed: ${series(malformed)}. ` +
-      'Step 9 converts nextReview to timestamptz and cannot do so from these.',
+      'The write half converts nextReview to timestamptz and derives last_rated from ' +
+      'ease and repetition, and cannot do either from these.',
+  );
+
+  claim(
+    findings,
+    zoneless.length === 0,
+    'every nextReview is exactly what toISOString() writes: UTC, ending in Z.',
+    `${count(zoneless.length, 'nextReview')} ${zoneless.length === 1 ? 'is' : 'are'} not in ` +
+      `toISOString() form: ${series(zoneless)}. v3.1 never wrote any other, and without ` +
+      'an explicit zone JavaScript and Postgres can read one string as two moments.',
   );
 
   if (Number.isFinite(earliest) && Number.isFinite(latest)) {
@@ -839,6 +896,31 @@ interface StrayKeyOutcome {
   readonly confusablesDiscarded: string[];
 }
 
+/** One row of `progress`. Its word_id is not known until the words are in. */
+interface ProgressRow {
+  /** The key as written in the file. Resolved to a word_id by its lowercase. */
+  readonly key: string;
+  /** The headword as stored, after 26a, that the key matched. */
+  readonly word: string;
+  /** True when key and stored headword are identical, case and all. */
+  readonly exact: boolean;
+  readonly ease: number;
+  readonly repetition: number;
+  /** ISO-8601 UTC, exactly as written in the file. */
+  readonly nextReview: string;
+  /** ISO-8601 UTC, derived (24e). */
+  readonly lastRated: string;
+}
+
+interface ProgressPlan {
+  readonly rows: readonly ProgressRow[];
+  /** Every progress key in the file. The orphan check reads the database against these. */
+  readonly keys: readonly string[];
+  /** The span of the derived last_rated values, for the report. */
+  readonly lastRatedEarliest: number;
+  readonly lastRatedLatest: number;
+}
+
 interface WritePlan {
   readonly rows: readonly WordRow[];
   readonly dictionaries: string[];
@@ -846,6 +928,7 @@ interface WritePlan {
   readonly stray: StrayKeyOutcome;
   /** The headwords 26a actually changed, as `word -> Word`. */
   readonly capitalized: string[];
+  readonly progress: ProgressPlan;
 }
 
 /** A string, or null. Absent and null both become a NULL column. */
@@ -996,6 +1079,135 @@ function buildWritePlan(
     usageGuides: usageGuides ?? [],
     stray,
     capitalized,
+    progress: buildProgressPlan(backup, rows, findings),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Progress (24d, 24e, 24h) — still in memory, still before any connection.
+// ---------------------------------------------------------------------------
+
+const DAY_MS = 86_400_000;
+
+/**
+ * SM-2's interval in days, copied verbatim from reference/lexicon-v3.jsx.
+ * Repetitions 0, 1 and 2 are fixed at 0, 1 and 3 days; after that each interval
+ * is the one before it times ease, rounded to a whole day.
+ */
+function getInterval(ease: number, repetition: number): number {
+  if (repetition === 0) return 0;
+  if (repetition === 1) return 1;
+  if (repetition === 2) return 3;
+  return Math.round(getInterval(ease, repetition - 1) * ease);
+}
+
+/**
+ * last_rated (24e). The file says when each word is next due, never when it
+ * was last rated. v3.1's recordAnswer worked forward from the moment of rating:
+ *
+ *   nextReview = the moment of rating + getInterval(ease, repetition) days
+ *
+ * using the ease and repetition it had just updated — which are the two values
+ * the file stores. So the moment of rating comes back by running it in reverse:
+ *
+ *   last_rated = next_review − getInterval(ease, repetition) days
+ *
+ * HOW EXACT IT IS. Rounding costs nothing: the interval is recomputed from the
+ * very numbers it was first computed from, so it comes out the same whole number
+ * of days. The error is in the clock. recordAnswer added days with setDate, on
+ * the browser's local calendar, which holds the time of day steady across a
+ * daylight-saving change; this subtracts 24-hour days in UTC, which does not.
+ * Where an interval crosses a change, the result is one hour off. If the ratings
+ * were made on US Eastern time — the data suggests they were — that is five
+ * records in the frozen file: adamantine, abjure, ad hoc, a posteriori and
+ * accede. The other 90 are exact, including all 20 at repetition 0, whose
+ * interval is zero days.
+ *
+ * Going back on the local calendar instead would need a time zone, and the file
+ * does not record one. An hour on five records costs less than an assumption
+ * written into code.
+ *
+ * WHAT IT IS NOT FOR. This is a derived value: good for "last rated in early
+ * March", not to be trusted for streaks or precise history. It is derived once,
+ * here, at migration. From cutover on the app records last_rated itself.
+ */
+function deriveLastRated(progress: WellFormedProgress): number {
+  return progress.timestamp - getInterval(progress.ease, progress.repetition) * DAY_MS;
+}
+
+/**
+ * Match every progress record to the headword it will be stored under, and
+ * derive its last_rated. A record that is malformed or points at no word is
+ * skipped here, because the read-time checks have already failed it.
+ */
+function buildProgressPlan(
+  backup: Backup,
+  words: readonly WordRow[],
+  findings: Findings,
+): ProgressPlan {
+  // lower(word) -> the headword as stored. Against the STORED form, not the
+  // file's, because that is what the key has to find once 26a has run.
+  const storedByLower = new Map(words.map((row) => [row.word.toLowerCase(), row.word]));
+
+  const rows: ProgressRow[] = [];
+  const claimed = new Map<string, string>();
+  const ratedInFuture: string[] = [];
+  const now = Date.now();
+  let lastRatedEarliest = Infinity;
+  let lastRatedLatest = -Infinity;
+
+  for (const [key, record] of Object.entries(backup.progress)) {
+    const progress = readProgress(record);
+    if (progress === null) continue; // already a failure in reportProgressShape
+
+    const word = storedByLower.get(key.toLowerCase());
+    if (word === undefined) continue; // already a failure in reportStructure
+
+    // Two keys differing only in case would land on one word, and word_id is
+    // progress's primary key: one of the two would be lost, with nothing to
+    // say which. The file has none; this is the guard for the day it does.
+    const earlier = claimed.get(key.toLowerCase());
+    if (earlier !== undefined) {
+      findings.fail(
+        `Progress records \`${earlier}\` and \`${key}\` both match the word \`${word}\`. ` +
+          'A word has one progress row, so one of them would be lost.',
+      );
+      continue;
+    }
+    claimed.set(key.toLowerCase(), key);
+
+    const lastRated = deriveLastRated(progress);
+    if (lastRated > now) ratedInFuture.push(key);
+    lastRatedEarliest = Math.min(lastRatedEarliest, lastRated);
+    lastRatedLatest = Math.max(lastRatedLatest, lastRated);
+
+    rows.push({
+      key,
+      word,
+      exact: key === word,
+      ease: progress.ease,
+      repetition: progress.repetition,
+      nextReview: progress.nextReview,
+      lastRated: new Date(lastRated).toISOString(),
+    });
+  }
+
+  // A moment of rating after this run started is impossible, so the rule
+  // above would not describe this data. That is a failure, not a warning (5e).
+  if (ratedInFuture.length > 0) {
+    findings.fail(
+      `The derived last_rated falls in the future for ` +
+        `${count(ratedInFuture.length, 'progress record')}: ${series(ratedInFuture)}. ` +
+        'A word cannot have been rated after now, so the last_rated rule does not ' +
+        'describe this file.',
+    );
+  }
+
+  return {
+    rows,
+    keys: Object.keys(backup.progress),
+    lastRatedEarliest,
+    lastRatedLatest,
   };
 }
 
@@ -1039,32 +1251,133 @@ const WORD_COLUMNS = [
  */
 const WORD_BATCH_SIZE = 200;
 
+/** The columns of `progress`, all five of them. */
+const PROGRESS_COLUMNS = [
+  'word_id',
+  'ease',
+  'repetition',
+  'next_review',
+  'last_rated',
+] as const;
+
 /**
- * `INSERT INTO words (...) VALUES ($1,...,$9), ($10,...,$18), ... RETURNING id, word`
+ * `($1, ..., $k), ($k+1, ..., $2k), ...` — the VALUES list of a multi-row INSERT.
  *
- * The placeholders are generated because their count depends on the batch size,
- * but the VALUES are still parameters — the headwords never enter the SQL text.
+ * The placeholders are generated because their count depends on the number of
+ * rows, but the values are still parameters — no data ever enters the SQL text.
  */
-function insertWordsSql(rowCount: number): string {
+function valuesPlaceholders(rowCount: number, columnCount: number): string {
   const tuples: string[] = [];
 
   for (let row = 0; row < rowCount; row += 1) {
-    const first = row * WORD_COLUMNS.length;
-    const placeholders = WORD_COLUMNS.map((_, column) => `$${first + column + 1}`);
+    const first = row * columnCount;
+    const placeholders = Array.from({ length: columnCount }, (_, column) => `$${first + column + 1}`);
     tuples.push(`(${placeholders.join(', ')})`);
   }
 
+  return tuples.join(', ');
+}
+
+/** `INSERT INTO words (...) VALUES ($1,...,$9), ($10,...,$18), ... RETURNING id, word` */
+function insertWordsSql(rowCount: number): string {
   return (
     `INSERT INTO words (${WORD_COLUMNS.join(', ')})\n` +
-    `VALUES ${tuples.join(', ')}\n` +
+    `VALUES ${valuesPlaceholders(rowCount, WORD_COLUMNS.length)}\n` +
     'RETURNING id, word'
   );
+}
+
+/**
+ * `INSERT INTO progress (...) VALUES ($1,...,$5), ...` — all 95 in one
+ * statement: 95 rows at five columns is 475 parameters, nowhere near the limit.
+ *
+ * next_review and last_rated go in as ISO-8601 strings ending in Z. Postgres
+ * reads the Z as UTC whatever the session's time zone, so the moment stored is
+ * the moment written. next_review is the file's own string, passed untouched.
+ */
+function insertProgressSql(rowCount: number): string {
+  return (
+    `INSERT INTO progress (${PROGRESS_COLUMNS.join(', ')})\n` +
+    `VALUES ${valuesPlaceholders(rowCount, PROGRESS_COLUMNS.length)}`
+  );
+}
+
+/**
+ * 5d step 7, the orphan check: the database's answer, read back inside the
+ * transaction, before COMMIT.
+ *
+ * The plan in memory already matched every record to a word. This asks Postgres
+ * what it actually holds, so a fault anywhere between the plan and the table —
+ * a lost row, an id attached to the wrong word — throws here, which rolls the
+ * whole load back instead of committing it.
+ *
+ * Step 5 reports orphans in the FILE. This is the other end: orphans in the
+ * DATABASE. Step 10's verify asks again from outside, sharing nothing with this.
+ *
+ * "Its own word" is checked by next_review, not by name alone. Matching names
+ * as a set would pass if two records were swapped onto each other's words;
+ * matching each row's next_review against the file's record for that word
+ * catches the swap. At millisecond precision no two of the 95 share a value.
+ * It is also the field with a time zone to get wrong, so a shifted timestamp
+ * fails here too.
+ *
+ * Headwords are lowercased in JavaScript on both sides, not with Postgres's
+ * lower(), so the two sides of the comparison use one definition of lowercase.
+ */
+async function checkProgress(client: PgClient, progress: ProgressPlan): Promise<void> {
+  // pg hands timestamptz back as a JavaScript Date: a moment, not a string.
+  const result = await client.query<{ word: string | null; next_review: Date }>(
+    'SELECT w.word, p.next_review FROM progress p LEFT JOIN words w ON w.id = p.word_id',
+  );
+
+  if (result.rows.length !== progress.keys.length) {
+    throw new Error(
+      `Orphan check: progress holds ${count(result.rows.length, 'row')}, but the file has ` +
+        `${count(progress.keys.length, 'progress record')}.`,
+    );
+  }
+
+  const planned = new Map(progress.rows.map((row) => [row.key.toLowerCase(), row]));
+  const landed = new Set<string>();
+
+  for (const row of result.rows) {
+    if (row.word === null) {
+      throw new Error('Orphan check: a progress row points at no word.');
+    }
+
+    const record = planned.get(row.word.toLowerCase());
+    if (record === undefined) {
+      throw new Error(
+        `Orphan check: a progress row sits on \`${row.word}\`, which has no progress record ` +
+          'in the file.',
+      );
+    }
+
+    if (row.next_review.getTime() !== Date.parse(record.nextReview)) {
+      throw new Error(
+        `Orphan check: the progress row on \`${row.word}\` reads back next_review ` +
+          `${row.next_review.toISOString()}, but the file's record for it says ` +
+          `${record.nextReview}. Either it is on the wrong word or the moment shifted.`,
+      );
+    }
+
+    landed.add(row.word.toLowerCase());
+  }
+
+  const missing = progress.keys.filter((key) => !landed.has(key.toLowerCase()));
+  if (missing.length > 0) {
+    throw new Error(
+      `Orphan check: ${count(missing.length, 'progress record')} did not land on ` +
+        `${missing.length === 1 ? 'its' : 'their'} own word: ${series(missing)}.`,
+    );
+  }
 }
 
 interface WriteOutcome {
   readonly userId: string;
   readonly wordsInserted: number;
-  /** lower(word) -> words.id. Step 9 resolves progress records through this. */
+  readonly progressInserted: number;
+  /** lower(word) -> words.id. Progress records resolve through this. */
   readonly wordIds: ReadonlyMap<string, string>;
   readonly committed: boolean;
 }
@@ -1116,9 +1429,9 @@ async function writeAll(
       `${count(plan.usageGuides.length, 'usage guide')}, order preserved`,
   );
 
-  // The word -> id map. Step 6 does not use it; step 9 resolves progress records
-  // through it, case-insensitively (24h). It is built from RETURNING rather than
-  // from insertion order, which Postgres does not promise for a multi-row INSERT.
+  // The word -> id map. Progress records resolve through it, case-insensitively
+  // (24h). It is built from RETURNING rather than from insertion order, which
+  // Postgres does not promise for a multi-row INSERT.
   const wordIds = new Map<string, string>();
 
   for (let offset = 0; offset < plan.rows.length; offset += WORD_BATCH_SIZE) {
@@ -1154,10 +1467,45 @@ async function writeAll(
   if (wordIds.size !== plan.rows.length) {
     throw new Error(
       `The word -> id map holds ${n(wordIds.size)} entries for ${n(plan.rows.length)} rows. ` +
-        'Step 9 resolves every progress record through it, so it must be complete.',
+        'Every progress record resolves through it, so it must be complete.',
     );
   }
-  console.log(`  word -> id map: ${count(wordIds.size, 'entry', 'entries')} (step 9 reads this)`);
+  console.log(`  word -> id map: ${count(wordIds.size, 'entry', 'entries')} (progress resolves through this)`);
+
+  // --- progress (5d step 6) --------------------------------------------------
+  // Each record finds its word_id by the lowercase of its key (24h). The plan
+  // already matched every key to a stored headword, so a miss here means the
+  // map and the plan disagree — a bug, not a data problem.
+  const progressValues: unknown[] = [];
+
+  for (const row of plan.progress.rows) {
+    const wordId = wordIds.get(row.key.toLowerCase());
+    if (wordId === undefined) {
+      throw new Error(`Progress record \`${row.key}\` has no word_id in the map.`);
+    }
+    progressValues.push(wordId, row.ease, row.repetition, row.nextReview, row.lastRated);
+  }
+
+  // The count printed is Postgres's own rowCount, not the plan's length: the
+  // line says "inserted", so it reports what the database says it inserted.
+  let progressInserted = 0;
+  if (plan.progress.rows.length > 0) {
+    const result = await client.query(insertProgressSql(plan.progress.rows.length), progressValues);
+    progressInserted = result.rowCount ?? 0;
+  }
+
+  const exact = plan.progress.rows.filter((row) => row.exact).length;
+  console.log(
+    `  progress: ${count(progressInserted, 'row')} inserted — ` +
+      `${n(exact)} matched exactly, ${n(plan.progress.rows.length - exact)} case-insensitively`,
+  );
+
+  // --- the orphan check (5d step 7) ------------------------------------------
+  await checkProgress(client, plan.progress);
+  console.log(
+    `  orphan check: ${count(plan.progress.keys.length, 'row')} read back for ` +
+      `${count(plan.progress.keys.length, 'record')} in the file, each on its own word`,
+  );
 
   if (dryRun) {
     await client.query('ROLLBACK');
@@ -1165,7 +1513,13 @@ async function writeAll(
     await client.query('COMMIT');
   }
 
-  return { userId, wordsInserted: plan.rows.length, wordIds, committed: !dryRun };
+  return {
+    userId,
+    wordsInserted: plan.rows.length,
+    progressInserted,
+    wordIds,
+    committed: !dryRun,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1178,7 +1532,7 @@ async function writeAll(
  * resolved to is the last check before a TRUNCATE.
  */
 function reportResolved(args: Args, sourcePath: string, connectionString: string): void {
-  console.log('\nimport-json — load words (step 6).');
+  console.log('\nimport-json — load words and progress (step 9).');
   console.log('\nResolved, before anything happens');
   console.log(`  target       ${args.target}  ->  ${TARGET_VARIABLES[args.target]}`);
   console.log(`  database     ${describeTarget(connectionString)}`);
@@ -1257,11 +1611,54 @@ function reportStrayKeyOutcomes(plan: WritePlan): void {
   console.log(`                        ${series(stray.confusablesDiscarded)}.`);
 }
 
+/**
+ * What the progress plan will write, and how each record found its word. The
+ * case-insensitive count is a report line, never a warning: once 26a's capitals
+ * are accepted it is nonzero on every run, and an alarm that always sounds is
+ * not an alarm.
+ */
+function reportProgressPlan(progress: ProgressPlan): void {
+  const { rows } = progress;
+  const exact = rows.filter((row) => row.exact);
+  const inexact = rows.filter((row) => !row.exact);
+  const atZero = rows.filter((row) => row.repetition === 0).length;
+
+  console.log('\nProgress — as planned (24d, 24e, 24h)');
+
+  const line = (label: string, howMany: number, what: string): void => {
+    console.log(`  ${label.padEnd(20)}${String(howMany).padStart(4)}  ${what}`);
+  };
+  const more = (what: string): void => {
+    console.log(`                        ${what}`);
+  };
+
+  line('matched exactly', exact.length, 'key = the headword as stored');
+  line('case-insensitively', inexact.length, 'key differs from the stored headword in case only');
+  if (inexact.length > 0) {
+    more(`${series(inexact.map((row) => `${row.key} -> ${row.word}`), 12)}.`);
+  }
+  line('rows to insert', rows.length, `of ${count(progress.keys.length, 'record')} in the file`);
+
+  line('last_rated', atZero, 'at repetition 0: interval 0, so last_rated = next_review');
+  line('', rows.length - atZero, 'later: next_review − getInterval(ease, repetition) days');
+
+  if (Number.isFinite(progress.lastRatedEarliest) && Number.isFinite(progress.lastRatedLatest)) {
+    const day = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+    more(`last_rated spans ${day(progress.lastRatedEarliest)} to ${day(progress.lastRatedLatest)}.`);
+  }
+  more('Derived once (24e). An hour off where an interval crosses a daylight-saving');
+  more('change. Not to be trusted for streaks or precise history.');
+}
+
 function reportWritePlan(args: Args, plan: WritePlan): void {
   console.log('\nWrite plan — one transaction, from the TRUNCATE onward');
   console.log(`  ${TRUNCATE_APPLICATION_TABLES}`);
   console.log('  schema_migrations is not named and is not touched (Q28).');
-  console.log(`  1 users row, 1 user_settings row, ${count(plan.rows.length, 'word')}.`);
+  console.log(
+    `  1 users row, 1 user_settings row, ${count(plan.rows.length, 'word')}, ` +
+      `${count(plan.progress.rows.length, 'progress record')}.`,
+  );
+  console.log('  Then the orphan check reads progress back, before anything is committed.');
   console.log(
     args.dryRun
       ? '  --dry-run: all of it runs, then ROLLBACK.'
@@ -1271,7 +1668,10 @@ function reportWritePlan(args: Args, plan: WritePlan): void {
 
 function reportOutcome(outcome: WriteOutcome, target: Target): void {
   if (outcome.committed) {
-    console.log(`\nCOMMITTED. ${target} now holds ${count(outcome.wordsInserted, 'word')}.`);
+    console.log(
+      `\nCOMMITTED. ${target} now holds ${count(outcome.wordsInserted, 'word')} and ` +
+        `${count(outcome.progressInserted, 'progress record')}.`,
+    );
   } else {
     console.log('\nROLLED BACK — --dry-run. Every statement ran; the database is as it was.');
   }
@@ -1313,7 +1713,8 @@ function usage(problem: string): never {
   console.error(`
 ${problem}
 
-Load a Lexicon backup into Postgres: the user, the settings and 1,070 words.
+Load a Lexicon backup into Postgres: the user, the settings, 1,070 words and
+95 progress records.
 
   node --env-file=.env server/scripts/import-json.ts \\
        <path-to-backup.json> --target dev|main [--dry-run] [--strict]
@@ -1437,12 +1838,13 @@ async function main(): Promise<void> {
   reportStrayKeys(backup, findings);
   reportProgressShape(backup, findings);
 
-  // --- build every row in memory (step 6). Still nothing opened. -----------
+  // --- build every row in memory (steps 6 and 9). Still nothing opened. ----
   const corrections = readCorrections(findings);
   const plan = buildWritePlan(backup, corrections, findings);
 
   reportCorrections(corrections, plan);
   reportStrayKeyOutcomes(plan);
+  reportProgressPlan(plan.progress);
   reportWritePlan(args, plan);
 
   // 5d: fail before the database is touched. Everything above is free; the
