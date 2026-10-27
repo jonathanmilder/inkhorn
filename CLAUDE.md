@@ -25,18 +25,27 @@ regenerating it in a new chat creates a separate artifact with empty storage.
 `map.md` is the planning document: numbered decisions (Q-numbers, stable across sessions)
 and the build sequence (Q20). **Read it before doing anything in this project.**
 
-- It lives at the repo root, **gitignored**. Notion holds the authoritative copy.
-- **Never edit it in place.** Corrections get reported for Jonathan to enter in Notion.
-- If the local file and Notion disagree, Notion wins.
+- It lives at the repo root and is **tracked in git** (since `3b4188e`). It is the only
+  authoritative copy; the Notion copy is retired and stale.
+- Edit it in place only for decisions Jonathan has actually given; every change is
+  reviewed as a git diff.
 
-Division of labour, settled and not to be re-litigated: **decisions, pushback and Map upkeep
-happen in chat; file-writing and run-look-adjust iteration happen in Claude Code.**
+Division of labour (revised 2026-10-26 — see "Tooling division" in the map): **a planning
+session does decisions, Map upkeep, handoffs and review; Claude Code builds, one session
+per step, in auto-accept mode.** Settle small in-step decisions yourself and list each in
+your report; **stop and ask only for architecture, cost, or anything that becomes public.**
+Start each build session by reading `handoff.md` (local and git-ignored; the planning
+session writes it).
+
+Resolved decisions, environment notes and data notes are in `decisions.md`. If `notes.md`
+exists at the repo root (git-ignored, local only), read it too: it holds how Jonathan wants
+things explained and private pointers that do not belong in a public repo.
 
 ## Build position
 
-**Steps 1–6 are complete. Step 7a — Express, the pool, and one endpoint — is next.**
-Q21 resolved 2026-08-09. Steps 5, 6 and 9 (the loader) are Claude Code's; step 11's
-acceptance checklist goes back to chat.
+**Steps 1–7b are complete. Step 8 — Render and the first deploy — is next.**
+Q21 resolved 2026-08-09. Claude Code builds every step; step 11's acceptance checklist is
+written with the planning session.
 
 `map.md` is authoritative on build position and this line will drift. **If this section and
 the map disagree, the map wins** — read it and correct this file.
@@ -61,7 +70,7 @@ time: **1,070 words / 974 fetched / 96 unfetched / 95 progress records / 971 Stu
 
 The file of record is `lexicon-backup-2026-08-03-b.json` (2,037,770 bytes), in Dropbox at
 `/AI/Projects/Lexicon/backups/` and synced locally to
-`C:\Users\jonat\Dropbox\AI\Projects\Lexicon\backups\`. **A smaller sibling
+`C:\Users\<user>\Dropbox\AI\Projects\Lexicon\backups\`. **A smaller sibling
 `lexicon-backup-2026-08-03.json` (1,302,925 bytes, 1,071 words / 663 fetched) sits beside it
 and is NOT the file** — it is the source of the superseded "~1,071 words" figure. Scripts take
 an explicit path with no default for this reason.
@@ -69,15 +78,11 @@ an explicit path with no default for this reason.
 Export shape is `{ words, progress, sources }`; word keys are snake_case; `sources` is an
 object with `dictionaries` (4) and `usageGuides` (6), camelCase.
 
-## What is in the repo
+## Repo notes
 
-| Path | What |
-|------|------|
-| `scripts/propose-capitalizations.js` | The 26a proposal script (step 2, done). Plain Node, no deps. |
-| `data/capitalizations.json` | 45 proposed capitalizations. Hand-reviewed; the loader applies only entries marked `accepted`. |
-| `data/capitalization-review.md` | Generated evidence dossier. Read-only — a re-run overwrites it. |
-| `server/src/migrate.ts` | Migration runner (step 5). |
-| `reference/` | v3.1 source and both briefs. **A frozen record — do not modify.** |
+- `reference/` holds the v3.1 source and both briefs. **A frozen record — do not modify.**
+- `data/capitalizations.json` is hand-reviewed; the loader applies only entries marked `accepted`.
+- `data/capitalization-review.md` is generated — a re-run overwrites it, so never hand-edit it.
 
 ## The v3.1 prototype (`reference/lexicon-v3.jsx`)
 
@@ -85,26 +90,11 @@ Consult the source for logic that is subtle and hard-won; consult the briefs and
 must exist. Single-file React component, no bundler, imports only `useState`, `useEffect`,
 `useRef`.
 
-**Storage** — Three keys via the artifact persistent storage API:
-
-- `vocab-words` — word objects with definitions
-- `vocab-progress` — SM-2 scheduling state per word
-- `vocab-sources` — user's preferred source list
-
-Writes are debounced at 500ms.
-
 **Claude API integration** — Fetches word definitions by calling the Claude API directly from
 the artifact. Batch size is 3 words per call (larger batches cause timeouts due to rich
 per-word output). Rate limit handling: detects 429/529 responses, escalates delays (15s →
 30s), inter-batch pause of 2.5s. Cancellation uses a `{ cancelled: boolean }` flag checked at
 each loop iteration (AbortController proved unreliable in the sandbox).
-
-**Spaced repetition** — SM-2 algorithm. Four quality tiers: No idea (1) / Struggled (3) /
-Got it (4) / Knew it (5). Ease floor 1.3. Missed cards reset to repetition 0.
-
-**Quiz modes** — definition→word, word→definition, fill-in-the-blank. MC weighting is 80%
-studied / 20% unstudied. Fill-in-the-blank targets words at repetition ≥ 1, biased toward
-repetition 2–4.
 
 **Export/Import** — Clipboard-based (programmatic downloads are broken in the artifact
 sandbox).

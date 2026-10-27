@@ -6,9 +6,11 @@ dist/
 *.log
 .DS_Store
 
-# Local planning documents — authoritative copy lives in Notion
-map.md
+# handoff.md is disposable session scaffolding.
+# map.md is TRACKED as of 2026-08-22 — the Map needs a diffable history.
 handoff.md
+# notes.md holds local working notes.
+notes.md
 
 # Claude Code local tool permissions — machine-specific, not shared
 .claude/settings.local.json
