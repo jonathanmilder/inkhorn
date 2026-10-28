@@ -114,7 +114,7 @@ export function App() {
   if (error !== null) {
     return (
       <main>
-        <h1>Lexicon</h1>
+        <h1>Inkhorn</h1>
         <p>Could not load the library: {error}</p>
         <p>Is the server up? `npm run dev:server`, in its own terminal.</p>
       </main>
@@ -124,7 +124,7 @@ export function App() {
   if (words === null) {
     return (
       <main>
-        <h1>Lexicon</h1>
+        <h1>Inkhorn</h1>
         <p>Loading…</p>
       </main>
     );
@@ -132,7 +132,7 @@ export function App() {
 
   return (
     <main>
-      <h1>Lexicon</h1>
+      <h1>Inkhorn</h1>
 
       {/*
         The count is the verification, not decoration. A list of 1,070 items is not

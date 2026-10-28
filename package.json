@@ -1,8 +1,8 @@
 {
-  "name": "lexicon",
+  "name": "inkhorn",
   "version": "0.1.0",
   "private": true,
-  "description": "Editor's vocabulary trainer — Postgres, Express, React.",
+  "description": "A vocabulary trainer.",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {

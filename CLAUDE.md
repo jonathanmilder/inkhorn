@@ -1,4 +1,4 @@
-# CLAUDE.md — Lexicon
+# CLAUDE.md — Inkhorn (formerly Lexicon)
 
 Guidance for Claude Code when working in this repository.
 
@@ -9,10 +9,11 @@ Guidance for Claude Code when working in this repository.
 
 ## What it is
 
-**A rebuild in progress.** Lexicon is being ported from a Claude artifact prototype into a
-deployed standalone app: Vite + React client, Express on Node server, Postgres on Neon via
-`pg` with hand-written SQL, TypeScript, one repo, one deployed process. Nothing is deployed
-yet.
+**A rebuild in progress.** Inkhorn — called Lexicon until the rename at step 8 (Q30) — is
+being ported from a Claude artifact prototype (the v3.1 "Lexicon" artifact) into a deployed
+standalone app: Vite + React client, Express on Node server, Postgres on Neon via `pg` with
+hand-written SQL, TypeScript, one repo, one deployed process. **The local folder is still
+`lexicon/`**; it is renamed later, when no worktree is open.
 
 `lexicon/` is its own git repo (`github.com/jonathanmilder/lexicon`, public, `main`).
 
@@ -43,7 +44,7 @@ things explained and private pointers that do not belong in a public repo.
 
 ## Build position
 
-**Steps 1–7b are complete. Step 8 — Render and the first deploy — is next.**
+**Steps 1–7b and 9 are complete. Step 8 — Render and the first deploy — is in progress.**
 Q21 resolved 2026-08-09. Claude Code builds every step; step 11's acceptance checklist is
 written with the planning session.
 

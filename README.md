@@ -1,6 +1,6 @@
-# Lexicon
+# Inkhorn
 
-An editor's vocabulary trainer. Currently being rebuilt from a Claude
+A vocabulary trainer. Currently being rebuilt from a Claude
 artifact prototype into a deployed standalone application.
 
 Planning is complete; the build is in progress. Nothing is deployed yet.
