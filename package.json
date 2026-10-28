@@ -2,7 +2,7 @@
   "name": "inkhorn",
   "version": "0.1.0",
   "private": true,
-  "description": "A vocabulary trainer.",
+  "description": "A vocabulary trainer for the words you look up: save them as you read, then learn them with spaced repetition.",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
