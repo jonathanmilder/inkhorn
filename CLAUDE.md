@@ -15,7 +15,9 @@ standalone app: Vite + React client, Express on Node server, Postgres on Neon vi
 hand-written SQL, TypeScript, one repo, one deployed process. **The local folder is still
 `lexicon/`**; it is renamed later, when no worktree is open.
 
-`lexicon/` is its own git repo (`github.com/jonathanmilder/lexicon`, public, `main`).
+`lexicon/` is its own git repo (`github.com/jonathanmilder/inkhorn`, public, `main`). The
+GitHub repo was renamed from `lexicon` on 2026-10-28; GitHub redirects the old URL, but the
+remote points at the new one.
 
 The v3.1 artifact is **frozen in code and in data** and lives in `reference/` as the porting
 reference. It is not the thing being developed, and it is not to be regenerated or reopened —
