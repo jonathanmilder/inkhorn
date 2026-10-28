@@ -136,7 +136,15 @@ app.get('/api/words', async (_request, response) => {
 
 const port = resolvePort();
 
-const server = app.listen(port, () => {
+// Express 5 calls this callback on failure too, with the error as its argument
+// (express/lib/application.js: `server.once('error', done)`). Without the check,
+// a port already in use printed "listening" and then exited 0 — found at step 8,
+// when a leftover dev server still held 3000.
+const server = app.listen(port, (error?: Error) => {
+  if (error) {
+    console.error(`server: could not listen on port ${port}: ${error.message}`);
+    process.exit(1);
+  }
   console.log(`server: listening on http://localhost:${port}`);
   console.log(`server: try http://localhost:${port}/api/words`);
 });
