@@ -7,8 +7,9 @@ the capture loop closed: a word looked up on the phone reaches the library witho
 manual export. Done planning = every decision needed before building can start.
 
 **Leg one is sequenced (Q20). Steps 1 through 7b are complete: 1,070 words in a browser,
-coming out of a real cloud Postgres (2026-08-22). Step 8 — Render and the first deploy —
-is NEXT. Q30 resolved 2026-10-26: the project becomes Inkhorn, renamed at step 8.**
+coming out of a real cloud Postgres (2026-08-22). Step 9 is complete too (2026-10-27): all
+95 progress records are in `dev`. Step 8 — Render and the first deploy — is NEXT, then
+step 10. Q30 resolved 2026-10-26: the project becomes Inkhorn, renamed at step 8.**
 
 **Where things live (split 2026-10-26).** This file holds the destination, the working
 rules, the open questions and the build order. **The resolved decision records, the
@@ -273,12 +274,23 @@ stretch with nothing tested.*
    **Also confirm Render's pre-deploy command exists** — not needed under Q28's Option A,
    but worth knowing before it is ever wanted.
    *Why this early:* Q19's failures are deploy-time-only and cannot reproduce on Windows.
-9. **Loader, part three — progress.** 95 records, case-insensitive matching, `nextReview`
-   → `timestamptz`, `last_rated` derived, orphan check, warnings block.
+9. **~~Loader, part three — progress.~~ ✅ DONE 2026-10-27.** 95 records, case-insensitive
+   matching, `nextReview` → `timestamptz`, `last_rated` derived, orphan check. Built in a
+   parallel worktree while step 8 waited, the first step under the revised method.
+   **Verified from Neon's SQL Editor on `dev`: 1,070 / 1 / 1 / 95 / 1**, and three rows
+   checked against the backup file by the planning session. Commit `b85372c`, pushed.
+   Full record in `decisions.md`.
+   → *the library and its study history in Postgres.*
 10. **Verification.** All seven checks, `--strict` available. **Calibrate check 5's window
     deliberately.** → *seven PASSes.* **This is the gate.**
+    **Carried from step 9:** check 3 compares per-row values, not only counts and
+    resolution (a swap passes a count). Verify re-implements the `last_rated` rule
+    independently, in UTC (one line; see Step 9). Make the loader's words line report
+    Postgres's own row count, as the progress line now does.
 11. **The cutover acceptance checklist** (Q15a), written now — before the UI exists.
-    **Written with the planning session.** **Must include: read the stray-key report lines.**
+    **Written with the planning session.** **Must include: read the stray-key report lines, and the progress plan's
+    case-insensitive matches** (nonzero once 26a's capitals land; a report line, never a
+    warning, so only the checklist makes someone read it).
 12. **Inventory pass on `lexicon-v3.jsx`.** *(Partially pre-empted 2026-08-05.)*
 13. **Slice — library.** Search, word detail with all seven fields, dark/amber/Georgia
     styling ported. **The pool's second consumer arrives here — 21c's cost lands now.**

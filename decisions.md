@@ -134,6 +134,8 @@ delete, the sources-editing UI, library filters if search covers them.
 - 24d. Progress — **its own table**, `word_id` as both primary and foreign key,
   `ON DELETE CASCADE`. **Confirmed by the data: 20 of the 95 records sit at repetition 0.**
 - 24e. Rating timestamp — **`last_rated timestamptz`**, derived once at migration.
+  **The rule (step 9, ratified 2026-10-27):** `next_review − getInterval(ease, repetition)`
+  days, in UTC. See Step 9, decision 1.
 - 24f. All timestamps are **`timestamptz`**, never plain `timestamp`.
 - 24g. Preferred sources — `user_settings` table, one row per user. Will host the BYOK
   Anthropic key in leg two (needs encryption at rest — noted, not solved).
@@ -222,8 +224,8 @@ Nullability is deliberate: only `word` and `user_id` are `NOT NULL`. **Q27 adds 
   (2) print target, confirm; (3) `TRUNCATE ... RESTART IDENTITY CASCADE`; (4) insert user,
   then settings; (5) insert words verbatim, applying 26a's corrections and the Q27 rules;
   (6) insert progress; (7) orphan check; (8) summary, then verify. **The whole run is
-  wrapped in a transaction.** **Steps 1–5 DONE (steps 5 and 6); step 6 of the sequence is
-  step 9 of the build.**
+  wrapped in a transaction.** **Steps 1–7 DONE (steps 5, 6 and 9 of the build).** Step 8,
+  "summary, then verify," is completed by step 10.
 - 5e. Failure handling — **fail on anything suggesting the data is not what we understand
   it to be; warn on anything understood but unexpected.** `--strict` promotes warnings to
   failures; off during the build, on for cutover.
@@ -904,6 +906,88 @@ habit listed as "optional, not adopted" under Environment is worth more than it 
 next.** *Closed 2026-10-26: the line now says step 8 is next.*
 
 
+### Step 9 — the loader's progress half (RESOLVED 2026-10-27)
+
+**Status: BUILT, RUN AND VERIFIED. Commit `b85372c`, pushed.** Built by Claude Code in a
+parallel git worktree (`step-9`) while step 8 waited: the first step under the revised
+tooling division. Reviewed against the diff by the planning session before Jonathan ran it.
+
+**THE EVIDENCE OF RECORD — Neon's SQL Editor on `dev`, 2026-10-27:**
+
+| words | users | user_settings | progress | schema_migrations |
+|---|---|---|---|---|
+| 1,070 | 1 | 1 | 95 | 1 |
+
+Three rows checked against the backup file by name (the planning session read the file
+directly): `abashed` (repetition 0, `last_rated` = `next_review`), `a fortiori`
+(repetition 5; intervals 1, 3, 7, 17, 40 days at ease 2.36, so April 7 from May 17, worked
+by hand) and `adjure` (the earliest `next_review`, 2026-03-01). Dry run and real run both
+PASS under `--strict`, 0 failures, 0 warnings. `npm run typecheck` clean.
+
+**The case-insensitive path, proven on synthetic input in a scratch copy outside the repo**
+(re-run against code matching `b85372c`):
+- **A key in the wrong case** (`glee` renamed `Glee`): 94 exact, 1 case-insensitive, all
+  95 landed on their own words.
+- **Headwords gaining capitals** (four 26a entries marked accepted): `arcadia`,
+  `brigadoon`, `dowager` and `goldilocks`, the only four of the 45 candidates with progress.
+  91 exact, 4 case-insensitive, all on their own words. **These four are where the path
+  goes live once 26a is reviewed.**
+- **Not tested:** a key and a headword that both carry capitals but differ (`ARCADIA`
+  against `Arcadia`). Both sides are lowercased, so this is low risk.
+- Nothing with an inexact match has ever been committed; every synthetic run rolled back.
+
+**SIX DECISIONS, RATIFIED BY JONATHAN 2026-10-27.**
+
+**1. `last_rated = next_review − getInterval(ease, repetition) × 24 hours`, in UTC.**
+The formula reverses v3.1's `recordAnswer` (`reference/lexicon-v3.jsx`, `getInterval` and
+`recordAnswer`), checked against the source by the build session.
+- **Rounding causes no error.** The handoff said it did, and was wrong: the interval is
+  recomputed from the same stored `ease` and `repetition` it was first computed from.
+- **The real error is daylight saving.** v3.1 added days with `setDate`, which holds the
+  clock time steady across a change; a UTC subtraction does not. **Five records are one
+  hour off:** `adamantine`, `abjure`, `ad hoc`, `a posteriori`, `accede`. The other 90 are
+  exact, including all 20 at repetition 0.
+- *Evidence the ratings were made on New York time:* read on the New York clock, those
+  five land 1–8 minutes from other ratings whose times are exact; read in UTC, 40–67 minutes.
+- **Strongest argument against:** the data shows which reading is right, and the
+  derivation is permanent. A New York calculation would be exact for all 95.
+- **Why not:** it hard-codes a time zone the file does not record, and adds about 20
+  lines that step 10 must re-implement (5f), for a value already marked "not for streaks or
+  precise history." **Reversible before step 17 by changing one function.**
+
+**2. The orphan check compares each row's `next_review` with the file**, not only the set
+of names. A name check passes when two records swap words; a deliberately broken loader
+proved it. All 95 `next_review` values are distinct. *Cost:* it overlaps step 10's verify.
+
+**3. Four new failures before the database is opened**, each proven to fire on bad input
+and silent on the clean file, on the step-5 precedent: a `nextReview` with no time zone
+(JavaScript and Postgres would read it as different moments); a negative repetition
+(`getInterval` would recurse forever); two keys colliding case-insensitively (one would be
+lost); a derived `last_rated` in the future. A shared `readProgress` serves both the read
+check and the write plan, so the two cannot disagree about which records are loadable.
+
+**4. A case-insensitive match is a report line, not a warning.** Once 26a's capitals land
+it is nonzero on every run, and an alarm that always sounds is not an alarm. *Cost:*
+nothing forces a look at cutover, so **step 11's checklist now names those lines.**
+
+**5. `valuesPlaceholders` extracted from step 6's `insertWordsSql` at its second caller**,
+not the third the house rule names. Small; the dry run re-proved the words insert at 1,070.
+
+**6. The progress line reports Postgres's own row count; the words line still reports the
+plan's.** Inconsistent, deliberately left; a deliberately broken loader that dropped a row
+showed why the database's count is the honest one. **Step 10 brings the words line into
+line.**
+
+**Working notes from the first parallel session, recorded so they are not relearned:**
+- **A 16 GB laptop ran out of memory twice:** a third VS Code window crashed VS Code, and
+  TypeScript 7 aborted `npm run typecheck` with `errno=1455` until other programs were
+  closed. **Run parallel sessions as `claude` in a terminal, not as extra VS Code windows**
+  (about 300 MB each, against a gigabyte or more per window).
+- **A worktree cannot be removed while any window stands in its folder**, even an idle
+  prompt.
+- **Long commands pasted into PowerShell can wrap into two commands.** Put a long path in a
+  variable first (`$f = "…"`), then use `$f`.
+
 ### Q30 — renaming the project to Inkhorn (RESOLVED 2026-10-26)
 
 **Does the project get renamed to Inkhorn?** *Inkhorn term* is the
@@ -1168,9 +1252,10 @@ the habit real.
 - **All 1,070 headwords are lowercase; zero exceptions.** **1,070 distinct compared
   case-insensitively** — so the functional unique index of 24h cannot collide on load.
 - A progress record is `{ ease, repetition, nextReview }` — only for words actually rated.
-  95 exist. Zero orphans; zero point at unfetched words. `last_rated` is derivable but
-  approximate for later repetitions and must not be trusted for streaks or precise
-  history. Post-migration values are exact.
+  95 exist. Zero orphans; zero point at unfetched words. `last_rated` is derived (24e):
+  exact except where an interval crosses a daylight-saving change, where five named
+  records are one hour off (Step 9, decision 1). Still not to be trusted for streaks or
+  precise history. Post-migration values are exact.
 - **Progress-record detail, verified 2026-08-08:**
   - **All 95 hold a numeric `ease`, an integer `repetition`, and a parseable `nextReview`.**
   - **`nextReview` spans 2026-03-01 to 2027-08-07.** See the calibration note on 5f check 5.
