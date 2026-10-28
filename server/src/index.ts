@@ -1,11 +1,16 @@
 /**
- * index.ts — the Express server (step 7a).
+ * index.ts — the Express server (step 7a; step 8 added the gate and the client).
  *
  * The first vertical slice's server half: Postgres -> pg -> Express -> JSON.
  * One endpoint, no styling. Step 7b added Vite and React on the other side of the
  * same wire; in development they reach this server through Vite's proxy, so the
  * client fetches the relative path /api/words and nothing here has to know that
  * two ports are involved. See vite.config.ts.
+ *
+ * Step 8 made this the one process Render runs. It now also serves the built
+ * client from dist/client (written by `npm run build`), behind the Basic Auth
+ * gate of 20d. In development nothing changes: Vite still serves the client on
+ * 5173, and this server's static half simply goes unused.
  *
  * HOW TO RUN IT
  * -------------
@@ -42,13 +47,31 @@
  *     rather than a half-measure now.
  */
 
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
+import { createBasicAuth } from './basic-auth.ts';
 import { createPool } from './db.ts';
 import { formatDatabaseError } from './format-database-error.ts';
 import { runMigrations } from './migrate.ts';
 
 /** Render supplies PORT. Locally, .env may or may not; 3000 if it does not. */
 const DEFAULT_PORT = 3000;
+
+/**
+ * Where `vite build` writes the client (see vite.config.ts), resolved from this
+ * file rather than from the current directory, so it is right whatever folder
+ * the process was started in.
+ */
+const CLIENT_DIR = fileURLToPath(new URL('../../dist/client/', import.meta.url));
+
+/**
+ * Am I running on Render? Either signal is enough: Render sets RENDER=true on
+ * every service, and NODE_ENV=production at run time for Node. Used for exactly
+ * two things, both refusals to start: a missing access gate, a missing client.
+ */
+const IN_PRODUCTION =
+  process.env.RENDER === 'true' || process.env.NODE_ENV === 'production';
 
 /**
  * Every column of `words` except `user_id`, which is the single-user placeholder
@@ -87,6 +110,19 @@ if (!connectionString) {
   process.exit(1);
 }
 
+// Both checks run before the migrations, so a misconfigured deploy fails in
+// seconds without touching the database.
+const basicAuth = createBasicAuth(IN_PRODUCTION);
+
+// A production server with no built client would answer every page with a 404
+// and still be marked live. Refuse instead, so the deploy fails where it can be
+// seen. Locally the client comes from Vite, so dist/ may well not exist.
+if (IN_PRODUCTION && !existsSync(`${CLIENT_DIR}index.html`)) {
+  console.error(`server: no built client at ${CLIENT_DIR}. Not starting.`);
+  console.error('  The build command must run `npm run build`.');
+  process.exit(1);
+}
+
 // ---------------------------------------------------------------------------
 // Boot: migrate to completion, THEN listen (Q28, option A)
 // ---------------------------------------------------------------------------
@@ -119,6 +155,10 @@ try {
 const pool = createPool(connectionString);
 const app = express();
 
+// The gate goes first, so it stands in front of everything below it: the API
+// and the client alike.
+if (basicAuth) app.use(basicAuth);
+
 app.get('/api/words', async (_request, response) => {
   try {
     const result = await pool.query(SELECT_WORDS);
@@ -133,6 +173,14 @@ app.get('/api/words', async (_request, response) => {
     response.status(500).json({ error: 'Could not read the library.' });
   }
 });
+
+// The built client, after the API so an /api route always wins. Express tries
+// handlers in the order they were added; a request that no route answered falls
+// through to here, and `/` gets index.html.
+//
+// No SPA fallback (sending index.html for every unknown path): there is no
+// client-side router, so an unknown path is a real 404.
+app.use(express.static(CLIENT_DIR));
 
 const port = resolvePort();
 
