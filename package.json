@@ -6,7 +6,7 @@
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
-    "node": ">=24.2.0"
+    "node": ">=24.2.0 <25"
   },
   "scripts": {
     "dev:server": "node --env-file=.env server/src/index.ts",
