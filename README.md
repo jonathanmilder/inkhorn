@@ -114,7 +114,9 @@ its options.
 
 In production, the build command is
 `npm ci --include=dev && npm run build`, and the start command is
-`npm start`.
+`node server/src/index.ts`. Not `npm start`: started through npm, the
+server never logged the shutdown signal Render sends on each redeploy,
+so it could not close its database connections cleanly.
 
 ## Contact
 

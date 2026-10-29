@@ -15,7 +15,8 @@
  * HOW TO RUN IT
  * -------------
  *   npm run dev:server    node --env-file=.env server/src/index.ts
- *   npm start             node server/src/index.ts    (what Render will run)
+ *   npm start             node server/src/index.ts    (Render runs the node command
+ *                                                      itself; see Shutdown)
  *
  * `dev:server` rather than `dev` since step 7b: development now takes two
  * processes, this one and `npm run dev:client` (Vite), each in its own terminal.
@@ -214,8 +215,10 @@ const server = app.listen(port, (error?: Error) => {
 // of the lines below. That is fine locally — Neon reclaims the connections — but
 // it is why stopping the server by hand looks abrupt.
 //
-// UNVERIFIABLE UNTIL STEP 8. This is written, not tested: nothing sends this
-// process a SIGTERM until Render does.
+// Verified on Render 2026-10-29 (step 8): a redeploy logs both lines below,
+// SIGTERM received and pool closed — but only when Render's start command is
+// `node server/src/index.ts`. Started through `npm start`, neither line ever
+// appeared, which is why production does not start through npm.
 process.on('SIGTERM', () => {
   console.log('server: SIGTERM received. Closing.');
 
