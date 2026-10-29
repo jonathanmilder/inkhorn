@@ -6,10 +6,10 @@ Lexicon runs as a deployed app outside the artifact sandbox, with real accounts,
 the capture loop closed: a word looked up on the phone reaches the library without
 manual export. Done planning = every decision needed before building can start.
 
-**Leg one is sequenced (Q20). Steps 1 through 7b are complete: 1,070 words in a browser,
-coming out of a real cloud Postgres (2026-08-22). Step 9 is complete too (2026-10-27): all
-95 progress records are in `dev`. Step 8 — Render and the first deploy — is NEXT, then
-step 10. Q30 resolved 2026-10-26: the project becomes Inkhorn, renamed at step 8.**
+**Leg one is sequenced (Q20). Steps 1 through 9 are complete. Inkhorn is live at
+https://inkhorn-jxxu.onrender.com (2026-10-29): Render, Ohio, behind Basic Auth, reading
+the Neon `dev` branch, 1,070 words counted in the browser. Step 10 — verification, the
+gate — is NEXT.**
 
 **Where things live (split 2026-10-26).** This file holds the destination, the working
 rules, the open questions and the build order. **The resolved decision records, the
@@ -128,8 +128,12 @@ passing cannot be jotted down for free.
   health check, no uptime pinger, no cron, no polling `fetch` in the client. One query every
   five minutes or less is a compute that never sleeps, and the free tier gone around day
   seventeen with no error printed anywhere. Applies to every step from 7a onward.
-- Prices and free-tier terms verified 2026-08-03; Neon re-verified 2026-08-09. **Render's
-  re-check is still outstanding (step 8).**
+- Prices and free-tier terms verified 2026-08-03; Neon re-verified 2026-08-09. **Render
+  re-checked 2026-10-28 against Render's own pages: matches decision 6.**
+- **Express 5's `app.listen` callback receives errors** (found at step 8): a port in use
+  printed `listening` and exited 0. Any future `listen` call must check its argument.
+- **On Render, production starts with `node server/src/index.ts`, never `npm start`**:
+  through npm the shutdown signal never reached the server (step 8, decision 12).
 - Question numbers are stable. Resolved items leave the frontier; survivors keep their
   numbers so cross-references hold across sessions.
 
@@ -144,9 +148,11 @@ passing cannot be jotted down for free.
     outgrown a Notion code block (~2 MB). **Q28's no-down-migrations decision makes
     restore-from-backup one of only two recovery paths.** [interacts with: 5, 28]
 
-23. **[step 8]** Custom domain — whether, what name, and when. Lean: ship on the free
-    onrender.com subdomain, buy a domain (~$12/yr) before the URL goes anywhere
-    professional. **Entangled with the Inkhorn question** — decide the name before buying.
+23. Custom domain — whether, what name, and when. **Resolved "not yet" at step 8:**
+    shipped on the free `inkhorn-jxxu.onrender.com` subdomain. Buy a domain (~$12/yr)
+    before the URL goes anywhere professional. The name is settled (Inkhorn); **check
+    trademark and domain availability first**, and consider a project contact address
+    (`hello@…`) for the README when it's bought.
 
 25. Homographs. v3.1 cannot hold minute (n.) and minute (adj.) as separate entries —
     `definitions[]` holds multiple senses fine, but pronunciation and part_of_speech are
@@ -161,29 +167,6 @@ passing cannot be jotted down for free.
     Knew it (5, "Instant"). **Note the quality mapping skips 2.** **Open only as: keep them,
     or choose fresh.** Lean keep. The governing constraint stands either way: the tiers must
     not let a half-remembered word count as known.
-
-32. **[NEW 2026-08-11; still open after step 7b, not blocking]** **The installed dependency
-    closure went from roughly 17 packages to roughly 80 at step 7a, and Q16's
-    phantom-dependency cost was accepted partly on the old number.**
-    **MEASURED 2026-08-22, after step 7b: 117 packages install on this machine.** Counted
-    from `package-lock.json` rather than from an install log. The lock file holds 161
-    entries; 44 are optional Rolldown platform bindings for other OS/CPU pairs and never
-    install here. 161 − 44 = 117. **Of the 117, 84 are production and 33 dev-only** — and
-    it is the production closure that reaches Render, so the number that matters for the
-    phantom-dependency hole at deploy time is 84, not 117. Vite 8 is Rolldown-based and
-    the React plugin's Babel/oxc peers are optional, so this is lighter than it could have
-    been. Q16 chose npm over pnpm knowing npm's flat
-    `node_modules` permits importing a package that was never declared — working locally,
-    failing on deploy — and judged it "a narrow hole against an unfamiliar tool, at ~a dozen
-    dependencies." **The hole is now roughly five times wider, and step 7b adds Vite and
-    React on top.**
-    *The question is not whether to switch package managers* — that would trade a known
-    narrow risk for an unfamiliar tool mid-build, which is exactly what Q16 rejected.
-    **It is whether anything cheap closes the hole**: a lockfile-aware check, a lint rule, or
-    simply the observation that a deploy at step 8 surfaces the failure early and often
-    enough to be self-correcting. **Lean: the step-8 deploy is the answer and no tooling is
-    needed** — Q20 put the deploy early for precisely this class of Windows-to-Linux
-    surprise. Recorded so the premise change is not silent.
 
 **Leg 2 — accounts**
 
@@ -263,7 +246,11 @@ stretch with nothing tested.*
    Commit `1684f46`. Full record in `decisions.md`.
    → *1,070 words in a browser, ugly, coming out of Postgres.*
 
-8. **Render, and the first deploy. ← NEXT.** Signup (**re-check pricing — still outstanding**),
+8. **~~Render, and the first deploy.~~ ✅ DONE 2026-10-29.** Live at
+   https://inkhorn-jxxu.onrender.com, behind Basic Auth; 1,070 counted in the browser;
+   shutdown handler verified; `dev` idle confirmed. Commits `c5d42ea`..`dd96ab0`, pushed.
+   **CU-hours reading due 2026-11-05 (reminder set).** Full record in `decisions.md`.
+   *As planned:* Signup (re-check pricing),
    connect repo, `DATABASE_URL` → the **dev** branch, deploy. **Q21's two step-8
    obligations: leave Render's health check on the DEFAULT TCP probe (21a), and run 21d's
    ten-minute idle check afterward.** Q23 resolves as "not yet." Basic Auth (20d) may land
@@ -299,7 +286,7 @@ stretch with nothing tested.*
 15. **Slice — quizzes.** All three modes, fill-in-the-blank targeting repetitions 2–4, the
     80/20 weighting. **Spot-check the four `example`-only words.**
 16. **Slice — fetch, add a word, export.** Anthropic key on the server, prompt revised for
-    canonical orthography. **Basic Auth (20d) required before this ships.**
+    canonical orthography. **Basic Auth (20d) required before this ships — landed at step 8.**
 17. **Cutover.** Migrations against `main`, load with typed confirmation, `verify --strict`,
     *then* flip Render's `DATABASE_URL`, then walk the acceptance checklist by hand.
     Q22 becomes urgent the moment this completes.
@@ -310,13 +297,15 @@ a schedule.
 **20d. Temporary access gate.** From step 8 the app is on a guessable public URL with no
 auth until leg two. Steps 8–15 are harmless, but step 16 adds an endpoint that **spends
 Jonathan's Anthropic key.** Fix: HTTP Basic Auth middleware, one env var, ~15 lines.
-**Required before step 16 ships; free to add at step 8.**
+**Required before step 16 ships; free to add at step 8.** **LANDED at step 8 (`e088dd1`):**
+two env vars, no new dependency, refuses to start in production without them.
 
 **20e. What was placed but not answered.** ~~Q7/Q16/Q19 → step 1~~ **(done)**.
 ~~24k/Q27 → step 3~~ **(done)**. ~~Q18 → step 4~~ **(done)**. ~~Q28 → step 4~~ **(done)**.
 ~~Q31 → step 4~~ **(done)**. ~~Q21 → precondition of step 8~~ **(done 2026-08-09; closed
 completely 2026-08-11)**.
-Q32 → step 7b or later, not blocking. Q23 → step 8. Q22 → urgent at step 17.
+~~Q32 → step 8~~ **(done: the deploy was the check)**. ~~Q23 → step 8~~ **("not yet")**.
+Q22 → urgent at step 17.
 
 ## Not yet specified (fog)
 

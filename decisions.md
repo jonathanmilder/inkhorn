@@ -34,7 +34,8 @@ of mind is a new dated entry, not an edit to the old one.** Cross-references to 
   Render's own free tier rejected — the server sleeps after 15 min, and free Postgres is
   deleted 30 days after creation.
 - 6a. One vendor or two? — Two. A generic connection string keeps the database swappable.
-- 6b. Region — Render and Neon both in US East.
+- 6b. Region — Render and Neon both in US East. **Made specific at step 8: Ohio**, because
+  Neon `dev` is AWS `us-east-2` (Ohio); Render cannot change a service's region later.
 - 6c. How they connect — Render holds `DATABASE_URL`; Express passes it to `pg`, which
   opens a small pool over TLS. No SDK, no vendor client, no platform API.
 - 17. Local development database — none. A Neon `dev` branch with its own connection
@@ -52,7 +53,8 @@ of mind is a new dated entry, not an edit to the old one.** Cross-references to 
   public from commit one, including every clumsy commit and wrong turn.
 - **`reference/lexicon-v3.jsx` is included**, with both briefs. The before-and-after is
   the story.
-- **Repo name `lexicon`; URL `github.com/jonathanmilder/lexicon`.**
+- **Repo name `lexicon`; URL `github.com/jonathanmilder/lexicon`.** **Renamed 2026-10-28 (Q30):
+  `github.com/jonathanmilder/inkhorn`.** GitHub redirects the old URL.
 - **README is a placeholder** — written properly at step 8.
 - **README register, settled:** a straight, accurate description, not a pitch. **The one
   thing pure documentation would omit and this must include: why decisions were made.**
@@ -64,7 +66,8 @@ of mind is a new dated entry, not an edit to the old one.** Cross-references to 
 
 ### Q16 — Node, package manager, repo layout (RESOLVED 2026-08-06)
 
-- **Node 24 LTS** (v24.14.1 verified locally; pinned for Render at step 8).
+- **Node 24 LTS** (v24.14.1 verified locally). **Pinned for Render at step 8 by
+  `engines` `>=24.2.0 <25` (`c4ff173`); Render resolved 24.22.2.**
 - **npm**, with `package-lock.json` committed. **Cost accepted:** npm's flat `node_modules`
   permits phantom dependencies — importing a package that was never declared, which works
   locally and can break on deploy. pnpm forecloses that. Judged a narrow hole against an
@@ -424,8 +427,9 @@ true *and* observed, in the exact place the original claim went wrong.
   portability trap bought to avoid retyping one string.
 
 **No `dotenv` dependency.** Node has read `.env` files natively since v20.6 via
-`--env-file`. **`npm run dev:server` passes `--env-file=.env`; `npm start` (what Render
-runs) does not pass it at all** — Render injects real environment variables. **Confirmed on
+`--env-file`. **`npm run dev:server` passes `--env-file=.env`; `npm start` does not pass it
+at all**, and neither does `node server/src/index.ts`, which is what Render actually runs
+since step 8 (decision 12) — Render injects real environment variables. **Confirmed on
 screen 2026-08-11**, when the script was still named `npm run dev`; it split into
 `dev:server` and `dev:client` at step 7b. Known limits: no multi-line values, no `${VAR}`
 expansion.
@@ -782,7 +786,8 @@ declaration is now false.** Fix: `>=24.2.0`. **~~Queued for step 7b~~ — DONE a
   user"* in leg two as **one job done once**. Half of it now is building ahead, and one
   endpoint is trivially findable.
 
-**4. A SIGTERM shutdown handler — SHIPPED UNTESTED, DELIBERATELY.** Claude Code wrote it
+**4. A SIGTERM shutdown handler — SHIPPED UNTESTED, DELIBERATELY. VERIFIED ON RENDER AT STEP 8
+(2026-10-29), once production started with `node` directly; see Step 8.** Claude Code wrote it
 unrequested and said plainly it was not claiming it works.
 *What it is:* Render sends `SIGTERM` before replacing an instance. The handler closes the
 pool and exits cleanly rather than dying mid-query.
@@ -988,6 +993,106 @@ line.**
 - **Long commands pasted into PowerShell can wrap into two commands.** Put a long path in a
   variable first (`$f = "…"`), then use `$f`.
 
+### Step 8 — Render, the first deploy, and the Inkhorn rename (RESOLVED 2026-10-29)
+
+**Status: LIVE at https://inkhorn-jxxu.onrender.com. Commits `c5d42ea`, `b025171`,
+`e088dd1`, `c4ff173`, `bf36c2e`, `21ffb95`, `b680dcd`, `dd96ab0`, all pushed.** Built by
+Claude Code over two sittings; every public push run by Jonathan after a planning-session
+check of the unpushed diff.
+
+**THE EVIDENCE OF RECORD — Jonathan's screen, 2026-10-29:**
+- **Deploy log, in order:** Node **24.22.2** → `npm ci`, 117 packages, **0 vulnerabilities**
+  → `vite build` (191 KB, 60 KB gzip, as at 7b) → `Basic Auth is ON.` → `migrate:` with
+  `rejectUnauthorized: true`, `nothing to apply` → `listening`. **Q32's check passed:** no
+  phantom dependency surfaced on Linux.
+- **The gate:** the prompt appeared; a wrong password was refused; the right one let him in.
+  (The build session also confirmed 401s with curl.)
+- **Counted, not eyeballed:** `document.querySelectorAll('#root ul li').length` → **1070** on
+  the live site.
+- **SIGTERM (step 7a's three obligations):** under `npm start`, two redeploys, no shutdown
+  line. Under `node server/src/index.ts`, both `SIGTERM received. Closing.` and
+  `pool closed.` **The handler works; npm stood in the way.** Note that SIGTERM goes to the
+  *old* instance, so the first redeploy after a start-command change still tests the old
+  command.
+- **21d:** `dev` **Idle**, last active 14 minutes earlier. **CU-hours reading due
+  2026-11-05.**
+
+**Other results:** Render pricing matches decision 6 (Starter $7/month; free tier sleeps after
+15 minutes). The Pre-Deploy Command field **exists** (paid services; left empty). The form now
+says "Compute" and "Deploy Web Service". `npm audit fix`: 5 → 0 vulnerabilities, no major
+bumps; the app never sets `trust proxy` or reads `req.ip`. The `noreply` commit email is set
+globally (`281466530+jonathanmilder@users.noreply.github.com`); local Gmail overrides were
+removed from his other repos. README written and edited line by line by Jonathan; Contact is
+the repo's GitHub issues, no address published. The tagline is open, due before step 13.
+
+**THIRTEEN DECISIONS, RATIFIED BY JONATHAN 2026-10-29.**
+1. **"Production" = `RENDER === 'true'` or `NODE_ENV === 'production'`**, used only to refuse
+   a start without the gate. *Cost:* on a host that sets neither, a missing gate fails open,
+   with a loud `Basic Auth is OFF` line.
+2. **Build command `npm ci --include=dev && npm run build`.** Render installs devDependencies
+   by default (`NODE_ENV=production` is runtime only); the flag makes it explicit.
+3. **Production refuses to start without `dist/client/index.html`.**
+4. **Basic Auth compares SHA-256 hashes with `timingSafeEqual`, both comparisons always run.**
+5. **One of the two auth variables set without the other → refuse, locally too.**
+6. **Node pinned by an `engines` upper bound (`>=24.2.0 <25`)**, not an exact version: Render
+   takes the newest 24.x. An unbounded range would have put it on 25.
+7. **Region Ohio** (see 6b).
+8. **The port bug (`b025171`):** Express 5 hands a listen error to the success callback, so a
+   port in use printed `listening` and exited 0. Now exits 1. Found by accident.
+9. **Left as "Lexicon":** backup filenames, `reference/lexicon-v3.jsx`, the loader's "not a
+   Lexicon backup" messages, and the local folder (renamed later, when no worktree is open).
+10. **`.env.example` gained a two-line comment on the gate's rules**, so Q18's copy of it in
+    this file no longer matches word for word. The file is authoritative.
+11. **README: "a word comes back just before you would forget it" became "a word you know well
+    comes back less often than one you struggled with"**, to avoid overclaiming.
+12. **Render's start command is `node server/src/index.ts`, not `npm start`.** *Why:* the
+    SIGTERM test. *Strongest argument against:* the failure was bounded (a 30-second hard
+    kill; Neon reclaims the connections), and `npm start` is what a reader expects. *Cost:*
+    the dashboard setting and `package.json`'s `start` script can drift apart. The README
+    says why.
+13. **Diagnosed by experiment, not by reading npm's source.** Two free redeploys. It shows
+    that removing npm fixes it, not where in npm → shell → node the signal is lost.
+
+**Working notes, recorded so they are not relearned:**
+- **One project per terminal window, each titled** (`$host.UI.RawUI.WindowTitle = "INKHORN"`).
+  On 2026-10-29 a backgrounded Claude Code conversation reopened as a different project's
+  session (Auracle), which looked like a crash.
+- **This planning session must not run git commands that write**, such as `pull`: it cannot
+  delete git's lock files, and a stray `maintenance.lock` was left under `.git` (moved aside,
+  not deleted).
+- **Pasting a multi-line block into PowerShell runs each line.** Clear an accidental paste with
+  Esc.
+
+### Q32 — the widened phantom-dependency hole (RESOLVED 2026-10-29, at step 8)
+
+**Resolved as the lean said: the step-8 deploy was the check, and no tooling is needed.** A
+clean `npm ci` and boot on Render's Linux, with 117 packages, surfaced no undeclared import.
+The audit fix added one nested production package (`content-type` under `body-parser`).
+**Any future deploy re-runs the same check for free.** The question as it stood:
+
+**The installed dependency
+closure went from roughly 17 packages to roughly 80 at step 7a, and Q16's
+phantom-dependency cost was accepted partly on the old number.**
+**MEASURED 2026-08-22, after step 7b: 117 packages install on this machine.** Counted
+from `package-lock.json` rather than from an install log. The lock file holds 161
+entries; 44 are optional Rolldown platform bindings for other OS/CPU pairs and never
+install here. 161 − 44 = 117. **Of the 117, 84 are production and 33 dev-only** — and
+it is the production closure that reaches Render, so the number that matters for the
+phantom-dependency hole at deploy time is 84, not 117. Vite 8 is Rolldown-based and
+the React plugin's Babel/oxc peers are optional, so this is lighter than it could have
+been. Q16 chose npm over pnpm knowing npm's flat
+`node_modules` permits importing a package that was never declared — working locally,
+failing on deploy — and judged it "a narrow hole against an unfamiliar tool, at ~a dozen
+dependencies." **The hole is now roughly five times wider, and step 7b adds Vite and
+React on top.**
+*The question is not whether to switch package managers* — that would trade a known
+narrow risk for an unfamiliar tool mid-build, which is exactly what Q16 rejected.
+**It is whether anything cheap closes the hole**: a lockfile-aware check, a lint rule, or
+simply the observation that a deploy at step 8 surfaces the failure early and often
+enough to be self-correcting. **Lean: the step-8 deploy is the answer and no tooling is
+needed** — Q20 put the deploy early for precisely this class of Windows-to-Linux
+surprise. Recorded so the premise change is not silent.
+
 ### Q30 — renaming the project to Inkhorn (RESOLVED 2026-10-26)
 
 **Does the project get renamed to Inkhorn?** *Inkhorn term* is the
@@ -1002,6 +1107,9 @@ ESL reader it is opaque; **a tagline carries the legibility the name gives up.**
 rename (repo, Render service, README, `package.json` name) lands at step 8, before the
 first deploy. **Still open:** the tagline, and a trademark/domain check before a
 domain is bought (Q23).
+**DONE at step 8 (2026-10-28):** the GitHub repo, `package.json`, the README, `CLAUDE.md`, the
+page title and the Render service all say Inkhorn. **Still open:** the tagline (before step
+13; candidates kept in Jonathan's notes) and the local folder rename.
 
 ## Working environment and data notes
 
