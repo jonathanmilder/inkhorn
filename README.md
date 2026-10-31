@@ -110,7 +110,9 @@ Open http://localhost:5173.
 
 The library itself is not in the repo. `server/scripts/import-json.ts`
 loads it from an export of the prototype. Run it with no arguments to see
-its options.
+its options. `server/scripts/verify.ts` then checks the database against
+the same export, read-only, and shares no code with the loader, so a bug in
+one cannot hide in both.
 
 In production, the build command is
 `npm ci --include=dev && npm run build`, and the start command is
