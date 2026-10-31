@@ -10,6 +10,9 @@
  *   step 6  insert the user, the settings, and the 1,070 words. <- done
  *   step 9  insert the 95 progress records, then check them.    <- done
  *
+ * Step 10's check of the result is NOT here. It is server/scripts/verify.ts,
+ * which imports nothing from this file, so a bug here cannot hide in both.
+ *
  * HOW TO RUN IT
  * -------------
  *   node --env-file=.env server/scripts/import-json.ts \
@@ -1434,6 +1437,11 @@ async function writeAll(
   // Postgres does not promise for a multi-row INSERT.
   const wordIds = new Map<string, string>();
 
+  // Summed from Postgres's own rowCount, batch by batch, not taken from the
+  // plan's length: the line says "inserted", so it reports what the database
+  // says it inserted. The progress line below has done the same since step 9.
+  let wordsInserted = 0;
+
   for (let offset = 0; offset < plan.rows.length; offset += WORD_BATCH_SIZE) {
     const batch = plan.rows.slice(offset, offset + WORD_BATCH_SIZE);
     const values: unknown[] = [];
@@ -1457,12 +1465,14 @@ async function writeAll(
       values,
     );
 
+    wordsInserted += result.rowCount ?? 0;
+
     for (const returned of result.rows) {
       wordIds.set(returned.word.toLowerCase(), returned.id);
     }
   }
 
-  console.log(`  words: ${count(plan.rows.length, 'row')} inserted`);
+  console.log(`  words: ${count(wordsInserted, 'row')} inserted`);
 
   if (wordIds.size !== plan.rows.length) {
     throw new Error(
@@ -1515,7 +1525,7 @@ async function writeAll(
 
   return {
     userId,
-    wordsInserted: plan.rows.length,
+    wordsInserted,
     progressInserted,
     wordIds,
     committed: !dryRun,
