@@ -228,7 +228,8 @@ Nullability is deliberate: only `word` and `user_id` are `NOT NULL`. **Q27 adds 
   then settings; (5) insert words verbatim, applying 26a's corrections and the Q27 rules;
   (6) insert progress; (7) orphan check; (8) summary, then verify. **The whole run is
   wrapped in a transaction.** **Steps 1–7 DONE (steps 5, 6 and 9 of the build).** Step 8,
-  "summary, then verify," is completed by step 10.
+  "summary, then verify," is completed by step 10 — **as a separate command,
+  `server/scripts/verify.ts`, run after the loader** (see Step 10).
 - 5e. Failure handling — **fail on anything suggesting the data is not what we understand
   it to be; warn on anything understood but unexpected.** `--strict` promotes warnings to
   failures; off during the build, on for cutover.
@@ -244,7 +245,8 @@ Nullability is deliberate: only `word` and `user_id` are `NOT NULL`. **Q27 adds 
     acceptance checklist, not `--strict`.**
   - **Proven in practice 2026-08-08 and again 2026-08-11:** the clean file passes
     `--strict` with 0 failures and 0 warnings.
-- 5f. Verification — a `verify` command in the same script:
+- 5f. Verification — a `verify` command ~~in the same script~~ **in its own file,
+  `server/scripts/verify.ts` (amended at step 10, 2026-10-31; see Step 10)**:
   1. Word count = **1,070** exactly.
   2. Fetched/unfetched split = **974 / 96**.
   3. Progress records = **95**, every `word_id` resolving.
@@ -257,6 +259,9 @@ Nullability is deliberate: only `word` and `user_id` are `NOT NULL`. **Q27 adds 
      window from **March 2027**. **The window must be calibrated deliberately at step 10.**
   6. **`user_settings` matches the file:** order compared, not just membership.
   7. **Study Due = 971**, counted from the file and from Postgres independently.
+  **AS BUILT AT STEP 10 (2026-10-31):** check 5's window is fixed, [2026-01-01,
+  2028-01-01) UTC; check 7 counts 971 as of 2026-08-04 plus file = Postgres at now; check 4
+  also compares every row. **Seven PASSes on `dev`.** See Step 10.
   **Design constraint: verification reads the database independently and re-reads the
   file — it shares no state with the loader.** **Verification must *re-implement* the
   transformations, not import the loader's copy.**
@@ -1062,6 +1067,86 @@ the repo's GitHub issues, no address published. The tagline is open, due before 
   not deleted).
 - **Pasting a multi-line block into PowerShell runs each line.** Clear an accidental paste with
   Esc.
+
+### Step 10 — verification, the gate (RESOLVED 2026-10-31)
+
+**Status: BUILT, RUN AND PASSED. Commits `3527bd2` (loader words line) and `1c2270f`
+(`server/scripts/verify.ts`), pushed 2026-10-31 (`0f02873..1c2270f`).** Built by Claude
+Code in one session. Reviewed by the planning session against the diff, the v3.1 source
+and the backup file before Jonathan ran it.
+
+**THE EVIDENCE OF RECORD — Jonathan's terminal, 2026-10-31:**
+- **`verify.ts <-b file> --target dev --strict`: seven PASSes, 0 warnings.** Read-only
+  proven before reading: `SHOW transaction_read_only -> on`, and Postgres refused the probe
+  write ("cannot execute UPDATE in a read-only transaction"). Check 4 compared all 1,070
+  rows, all eight columns, 0 differ. Check 5: file and Postgres spans identical to the
+  millisecond, 2026-03-01T03:28:13.250Z to 2027-08-07T02:30:47.553Z, 0 outside. Check 7:
+  971 / 971 as of 2026-08-04, and 971 / 971 at 2026-10-31T14:27Z.
+- **Loader `--dry-run --strict --target dev`: PASS, 0 failures, 0 warnings.**
+  `words: 1,070 rows inserted` is now Postgres's own `rowCount`. Rolled back.
+- *Session-side, from the build session's report, not re-checked:* 15 mutated backups and
+  4 deliberate breaks of verify's own rules each failed as predicted (scratch files outside
+  the repo). `npm run typecheck` clean.
+
+**Checked by the planning session against the files, not the report:**
+- verify.ts imports only `db-config.ts` and `format-database-error.ts` (read from its
+  import block).
+- `intervalDays` matches v3.1's `getInterval` (`reference/lexicon-v3.jsx`, line 59); the
+  Study Due rule matches v3.1's `dueWords` (lines 151–155: fetched words only, no record
+  = due). The Q27 rules match Q27; `last_rated` is Step 9's decision 1.
+- The dated claims in verify's comments, recomputed from the `-b` file in Python: Study Due
+  971 on 2026-08-04 and on 2026-10-31; the last value due before the baseline is
+  `a fortiori`, 2026-05-17 04:08 UTC; `accede` falls due 2026-11-17 15:23 UTC; 4 promoted
+  and 72 superseded; `moribund` has the longest usage note, 1,314 characters.
+- The schema has no triggers, so the probe write cannot fire one.
+
+**THREE DECISIONS TAKEN WITH JONATHAN BEFORE BUILDING (2026-10-31):**
+1. **Verify is its own file, `server/scripts/verify.ts`, importing nothing from the
+   loader.** Reverses 5f's "in the same script." *Why:* independence is provable from the
+   import list. *Cost:* the loader no longer ends with verify (5d step 8); they are two
+   commands, and step 11's checklist names both.
+2. **Study Due = 971 as of 2026-08-04T00:00Z, from the file and from Postgres; plus file
+   = Postgres at now, with no number.** *Why:* 971 counted at now fails on correct data
+   from 2026-11-17 15:23 UTC, when `accede` falls due (972), and again on 2027-08-07.
+   **After 2026-11-17 the now line reads 972 on both sides; that is correct.** Until then
+   the two sub-checks see the same number and cannot be told apart.
+3. **Check 5's window is fixed, [2026-01-01, 2028-01-01) UTC, never relative to today.**
+   *Why:* frozen data does not age, and the faults the check exists for (a missing value
+   read as 1970, seconds taken for milliseconds) land decades out, not months. A time-zone
+   shift is check 3's to catch, not this one's.
+
+**FIVE IN-STEP DECISIONS, RATIFIED BY JONATHAN 2026-10-31.** The build session took them
+without listing them; the planning session surfaced them from the code.
+1. **`main`'s typed phrase is `verify main`, not `load main`:** a phrase typed from habit
+   should not carry from one program to the other. A wrong phrase exits; it costs nothing.
+2. **Check 1 compares the headword sets, and check 4 compares every row, not only the three
+   spot words.** Broadens 5f. The spot words print lengths and "ok", not text, so they were
+   never a human read; the sweep compares every character, and it is the only part that
+   reaches the words Q27 alters (`satrap`, `importunate`).
+3. **`audacious` fills two of check 4's slots:** `example`-only, and em dash plus quotation
+   marks. 5f allows it ("one of the three"), and the sweep covers every em dash anyway.
+4. **A file verify cannot fully read stops it before the database is opened.** A file of
+   record that fails is almost certainly the wrong file, and a comparison against it would
+   mean nothing.
+5. **An unknown key is a warning, and `--strict` makes it a failure** (5e, kept). *Strongest
+   argument against:* without `--strict`, verify can PASS with a blind spot. *Answer:* the
+   gate always runs `--strict` (step 17), and the frozen file has no unknown key. Not a
+   security exposure: the file is only parsed, never executed, and verify cannot write.
+
+**Notes, none queued as fixes:**
+- Check 7's file side looks progress up by exact headword, as v3.1 does; check 3 matches
+  case-insensitively, as the loader does. No progress key in the frozen file differs in case
+  (checked in Python), so the two cannot disagree on it.
+- Verify filters by no user; checks 1 and 6 fail, not pass, once a second user exists.
+  Carried to Q8.
+- The TLS line prints an em dash, from `describeTls` in `db-config.ts`; verify's "ASCII
+  only" holds for its own text. It rendered correctly in PowerShell.
+- The loader's banner still reads "(step 9)". Still accurate: step 9 was its last data step.
+- **The PowerShell paste hazard recurred (see Step 8):** verify's output was pasted into
+  PowerShell after Claude Code had exited. Every line failed harmlessly. `mode` was the only
+  real program reached, and it refused its arguments; the `->` line created no file; no file
+  in the repo changed (checked). **Before pasting, read the window's last line: an input box
+  is Claude Code; a bare `PS …>` takes commands only.**
 
 ### Q32 — the widened phantom-dependency hole (RESOLVED 2026-10-29, at step 8)
 

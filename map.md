@@ -6,10 +6,11 @@ Lexicon runs as a deployed app outside the artifact sandbox, with real accounts,
 the capture loop closed: a word looked up on the phone reaches the library without
 manual export. Done planning = every decision needed before building can start.
 
-**Leg one is sequenced (Q20). Steps 1 through 9 are complete. Inkhorn is live at
+**Leg one is sequenced (Q20). Steps 1 through 10 are complete. Inkhorn is live at
 https://inkhorn-jxxu.onrender.com (2026-10-29): Render, Ohio, behind Basic Auth, reading
 the Neon `dev` branch, 1,070 words counted in the browser. Step 10 — verification, the
-gate — is NEXT.**
+gate — passed 2026-10-31: seven PASSes under `--strict` against `dev`. Step 11 — the
+cutover acceptance checklist — is NEXT.**
 
 **Where things live (split 2026-10-26).** This file holds the destination, the working
 rules, the open questions and the build order. **The resolved decision records, the
@@ -175,6 +176,9 @@ passing cannot be jotted down for free.
    `password_hash`. The real work is session handling and making every query filter by the
    logged-in user. `DEFAULT_USER_ID` is deleted, not worked around — **and Q18 made it
    greppable.** **The Basic Auth gate (20d) is deleted here too.** Budget ~a day.
+   **`server/scripts/verify.ts` filters by no user (step 10)** — e.g.
+   `'SELECT dictionaries, usage_guides FROM user_settings'` reads every row. Once a second
+   user exists, checks 1 and 6 fail (they do not falsely pass). Scope verify here.
    [interacts with: 24i, 20d, 18]
 
 9. Cost control. Constrained toward BYOK with per-account key storage. The key lands on
@@ -268,16 +272,23 @@ stretch with nothing tested.*
    checked against the backup file by the planning session. Commit `b85372c`, pushed.
    Full record in `decisions.md`.
    → *the library and its study history in Postgres.*
-10. **Verification.** All seven checks, `--strict` available. **Calibrate check 5's window
-    deliberately.** → *seven PASSes.* **This is the gate.**
-    **Carried from step 9:** check 3 compares per-row values, not only counts and
-    resolution (a swap passes a count). Verify re-implements the `last_rated` rule
-    independently, in UTC (one line; see Step 9). Make the loader's words line report
-    Postgres's own row count, as the progress line now does.
+10. **~~Verification.~~ ✅ DONE 2026-10-31. The gate passed:** seven PASSes under
+    `--strict` against `dev`, 0 warnings, in Jonathan's terminal; the loader's dry run
+    PASS, 0 failures, 0 warnings. **`server/scripts/verify.ts` is its own file and imports
+    nothing from the loader** (reverses 5f's "same script"). Read-only is enforced by
+    Postgres and proven on every run. Check 5's window is fixed, [2026-01-01, 2028-01-01)
+    UTC; check 7 is 971 as of 2026-08-04 plus file = Postgres now. All three carried items
+    closed. Eight decisions, all Jonathan's or ratified by him. Commits `3527bd2`,
+    `1c2270f`, pushed. Full record in `decisions.md`.
+    → *seven PASSes.*
 11. **The cutover acceptance checklist** (Q15a), written now — before the UI exists.
     **Written with the planning session.** **Must include: read the stray-key report lines, and the progress plan's
     case-insensitive matches** (nonzero once 26a's capitals land; a report line, never a
     warning, so only the checklist makes someone read it).
+    **Also, from step 10:** name both commands, the loader then verify, each with
+    `--strict` (separate programs since step 10). **Verify's check 7 "now" line reads 972,
+    not 971, from 2026-11-17 15:23 UTC** (`accede` falls due) — correct, not a failure;
+    the 971 sub-check is the as-of line.
 12. **Inventory pass on `lexicon-v3.jsx`.** *(Partially pre-empted 2026-08-05.)*
 13. **Slice — library.** Search, word detail with all seven fields, dark/amber/Georgia
     styling ported. **The pool's second consumer arrives here — 21c's cost lands now.**
@@ -287,7 +298,8 @@ stretch with nothing tested.*
     80/20 weighting. **Spot-check the four `example`-only words.**
 16. **Slice — fetch, add a word, export.** Anthropic key on the server, prompt revised for
     canonical orthography. **Basic Auth (20d) required before this ships — landed at step 8.**
-17. **Cutover.** Migrations against `main`, load with typed confirmation, `verify --strict`,
+17. **Cutover.** Migrations against `main`, load with typed confirmation, `verify --strict`
+    (its own command since step 10; its typed phrase is `verify main`),
     *then* flip Render's `DATABASE_URL`, then walk the acceptance checklist by hand.
     Q22 becomes urgent the moment this completes.
 

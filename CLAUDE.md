@@ -46,8 +46,8 @@ things explained and private pointers that do not belong in a public repo.
 
 ## Build position
 
-**Steps 1–9 are complete; Inkhorn is live on Render (2026-10-29). Step 10 — verification — is
-next.**
+**Steps 1–10 are complete; Inkhorn is live on Render (2026-10-29), and step 10's verify
+passed on `dev` (2026-10-31). Step 11 — the cutover acceptance checklist — is next.**
 Q21 resolved 2026-08-09. Claude Code builds every step; step 11's acceptance checklist is
 written with the planning session.
 
