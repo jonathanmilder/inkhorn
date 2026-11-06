@@ -622,8 +622,10 @@ repo. The Map is the only place it can live, so it is recorded twice.
 **STATUS: APPLIED 2026-08-09, verified on screen.**
 **CORRECTION — Free offers NO fixed-size option.** The pin is the autoscale slider with both
 ends at 0.25. **Jonathan's screen corrected the claim; that is the standing rule working.**
-**OPEN, one click: the PROJECT DEFAULT compute size** (Settings → Compute → Modify
+~~**OPEN, one click: the PROJECT DEFAULT compute size**~~ (Settings → Compute → Modify
 defaults). It matters only because a *restored* branch would inherit the default.
+**CLOSED 2026-11-06: the project default reads 0.25 CU**, read off the console by Jonathan.
+A restored branch inherits the pin.
 [interacts with: 22]
 
 **21c. Pool configuration — BUILT AT STEP 7a, and the shape is RATIFIED (2026-08-11).**
@@ -722,6 +724,14 @@ question again — and the failure is silent, with no error anywhere until the m
 - **Baseline for comparison, read 2026-08-09: 0.27 CU-hours total** (`main` 0.14, `dev`
   0.13) since 2026-08-08 — about one awake-hour across both branches for a full day of real
   work, against 100.
+- **THE PRODUCTION READING, 2026-11-06 — Q21a CONFIRMED IN PRODUCTION.** Read off Neon's
+  console by Jonathan: **0.02 CU-hours for the billing period that began 2026-10-31**, about
+  six days of the always-on Render server (deployed 2026-10-29) reading `dev`. At 21b's
+  fixed 0.25 CU that is **about five minutes awake** (0.08 hours; the console's two-decimal
+  rounding allows roughly four to six). *What the failure would have looked like:* one query
+  every five minutes keeps the compute awake around the clock, about 36 CU-hours over the
+  same six days. **21d's step-8 check is done; nothing under Q21 is owed.** The tripwire
+  above still stands.
 - **Operational note: browsing the Neon console WAKES a compute.** Do not leave a branch
   page open in a background tab.
 
@@ -1020,7 +1030,7 @@ check of the unpushed diff.
   *old* instance, so the first redeploy after a start-command change still tests the old
   command.
 - **21d:** `dev` **Idle**, last active 14 minutes earlier. **CU-hours reading due
-  2026-11-05.**
+  2026-11-05.** **Read 2026-11-06: 0.02 CU-hours since 2026-10-31; see Q21d.**
 
 **Other results:** Render pricing matches decision 6 (Starter $7/month; free tier sleeps after
 15 minutes). The Pre-Deploy Command field **exists** (paid services; left empty). The form now
@@ -1359,7 +1369,8 @@ closure counts distinct *names*. 65 names + 2 duplicate directories = 67.
   autoscale slider with both ends at 0.25.** **Scale to zero confirmed non-configurable on
   Free, on screen.** Recorded here as well as in Q21 because it is console state with no
   representation anywhere in the repo, and unrecorded console state is exactly what cost a
-  session with the artifact. **Still open, one click: the project DEFAULT compute size.**
+  session with the artifact. ~~**Still open, one click: the project DEFAULT compute size.**~~
+  **Closed 2026-11-06: the project default reads 0.25 CU** (see Q21b).
 - **Neon role passwords are per branch, and resetting one is genuinely buried in the
   console** (found the hard way 2026-08-08). A rotation is **two resets, not one** — `main`
   and `dev` hold separate role passwords.

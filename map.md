@@ -253,7 +253,9 @@ stretch with nothing tested.*
 8. **~~Render, and the first deploy.~~ ✅ DONE 2026-10-29.** Live at
    https://inkhorn-jxxu.onrender.com, behind Basic Auth; 1,070 counted in the browser;
    shutdown handler verified; `dev` idle confirmed. Commits `c5d42ea`..`dd96ab0`, pushed.
-   **CU-hours reading due 2026-11-05 (reminder set).** Full record in `decisions.md`.
+   ~~CU-hours reading due 2026-11-05.~~ **Read 2026-11-06: 0.02 CU-hours since 2026-10-31,
+   about five minutes awake in six days — Q21a holds in production; the project default
+   compute reads 0.25 CU (Q21b closed).** Full record in `decisions.md`.
    *As planned:* Signup (re-check pricing),
    connect repo, `DATABASE_URL` → the **dev** branch, deploy. **Q21's two step-8
    obligations: leave Render's health check on the DEFAULT TCP probe (21a), and run 21d's
