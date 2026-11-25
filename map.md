@@ -291,6 +291,36 @@ stretch with nothing tested.*
     `--strict` (separate programs since step 10). **Verify's check 7 "now" line reads 972,
     not 971, from 2026-11-17 15:23 UTC** (`accede` falls due) — correct, not a failure;
     the 971 sub-check is the as-of line.
+    **SETTLED WITH JONATHAN 2026-11-06 — where it lives and what it may say:**
+    - **`cutover-checklist.md`, tracked in git, is the version of record.** Reviewed as a
+      diff, like this Map. *Why:* only a dated commit proves the checks were written before
+      the UI; a page or a git-ignored file cannot.
+    - **At step 17 it is published as a checklist page** (one row per item, checkboxes that
+      persist, copyable commands), **built from the file** — the page is the instrument to
+      walk, not a second copy of record. **Results go into the Step 17 record in
+      `decisions.md`,** not onto the page.
+    - **The step 13–15 handoffs each tell the build session not to open
+      `cutover-checklist.md`.** *Strongest argument against tracking it:* a builder that
+      can read the pass marks can build to them. *Answer:* the checks test faithful copying
+      of v3.1, which is the build's job anyway, against real data and real randomness.
+      **Cost accepted:** the line is a rule that must be remembered, not one that cannot be
+      broken.
+    - **Word lists go in the public file, with their repetition counts.** They are a
+      snapshot of the `-b` file, valid only straight after a load (`dev` at step 15,
+      `main` at step 17), and are never updated as study goes on. The counts let a reader
+      re-check each list against the file, and explain why a word drops out mid-session.
+    - **The walk writes study data, so it is split by database.** Every quiz answer and
+      skip records progress (`recordAnswer`, `lexicon-v3.jsx` lines 484 and 491, read
+      2026-10-31). **Checks that damage progress run on `dev` only, followed by a reload**
+      — the fallback check's fifteen skips reset fifteen words to repetition 0. **On `main`
+      the walk comes after `verify --strict` and is Jonathan's first real study session:
+      honest answers, never a deliberate wrong one.** After the first answer `main` no
+      longer matches the file and verify no longer passes against it — expected, not a
+      failure.
+    - **No Neon branch before the walk.** *Why:* until the first real study on `main`, the
+      backup file is the restore point — a bad write found during the walk is undone by
+      re-running the loader against `main`, losing only the walk's answers. A restore point
+      matters only once `main` holds something the file does not, which is Q22.
 12. **Inventory pass on `lexicon-v3.jsx`.** *(Partially pre-empted 2026-08-05.)*
 13. **Slice — library.** Search, word detail with all seven fields, dark/amber/Georgia
     styling ported. **The pool's second consumer arrives here — 21c's cost lands now.**
